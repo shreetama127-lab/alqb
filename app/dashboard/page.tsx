@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [stats, setStats] = useState({ answered: 0, correct: 0 });
   const [topics, setTopics] = useState<TopicStat[]>([]);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     async function loadStats() {
@@ -26,18 +27,34 @@ export default function DashboardPage() {
 
       const { data: ans } = await supabase
         .from("answers")
-        .select("is_correct, question_id")
+        .select("is_correct, question_id, created_at")
         .eq("user_id", userData.user.id);
 
       if (ans && ans.length > 0) {
         setStats({ answered: ans.length, correct: ans.filter((a) => a.is_correct).length });
 
+        // ---- streak: count consecutive days up to today ----
+        const days = new Set(
+          ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
+        );
+        let count = 0;
+        const cursor = new Date();
+        // allow streak to "hold" if they haven't answered yet today but did yesterday
+        if (!days.has(cursor.toISOString().slice(0, 10))) {
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        while (days.has(cursor.toISOString().slice(0, 10))) {
+          count += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        setStreak(count);
+
+        // ---- per-topic ----
         const { data: questions } = await supabase.from("questions").select("id, topic");
         const topicOf: Record<number, string> = {};
         (questions || []).forEach((qq) => {
           topicOf[qq.id] = qq.topic || "Other";
         });
-
         const map: Record<string, { answered: number; correct: number }> = {};
         ans.forEach((a) => {
           const t = topicOf[a.question_id] || "Other";
@@ -87,10 +104,25 @@ export default function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">
-        {greeting}, <span className="text-emerald-700">{firstName}</span>
-      </h1>
-      <p className="mt-2 text-zinc-500">Here&apos;s how your revision is going.</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">
+            {greeting}, <span className="text-emerald-700">{firstName}</span>
+          </h1>
+          <p className="mt-2 text-zinc-500">Here&apos;s how your revision is going.</p>
+        </div>
+        {streak > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3">
+            <span className="text-3xl">🔥</span>
+            <div>
+              <p className="text-2xl font-extrabold text-orange-600">{streak}</p>
+              <p className="text-xs font-semibold text-orange-600/70">
+                day{streak === 1 ? "" : "s"} in a row
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {stats.answered === 0 ? (
         <div className="mt-10 rounded-3xl border border-emerald-100 bg-white p-12 text-center shadow-sm">
