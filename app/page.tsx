@@ -47,8 +47,6 @@ export default function Home() {
         return;
       }
 
-      // Supabase quirk: signing up with an email that already exists can
-      // return "success" but with an empty identities list. Catch that here.
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         setMode("login");
         showMessage("You already have an account — log in below.", true);
@@ -58,11 +56,7 @@ export default function Home() {
 
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
       if (loginError) {
-        if (loginError.message.toLowerCase().includes("not confirmed")) {
-          showMessage("Account created! Check your email for a confirmation link, then log in.", false);
-        } else {
-          showMessage("Account created! You can now log in.", false);
-        }
+        showMessage("Account created! You can now log in.", false);
         setMode("login");
         setLoading(false);
       } else {
@@ -71,9 +65,7 @@ export default function Home() {
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        if (error.message.toLowerCase().includes("not confirmed")) {
-          showMessage("Your email isn't confirmed yet — check your inbox for the confirmation link.", true);
-        } else if (error.message.toLowerCase().includes("invalid")) {
+        if (error.message.toLowerCase().includes("invalid")) {
           showMessage("Wrong email or password — double-check and try again.", true);
         } else {
           showMessage(error.message, true);
@@ -96,6 +88,9 @@ export default function Home() {
           <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
             Master A-Level Biology &amp; Chemistry.
           </h1>
+          <p className="mt-4 text-lg text-zinc-500">
+            Exam-board specific questions with instant explanations, timed practice, and progress tracking.
+          </p>
         </div>
 
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 shadow-lg shadow-emerald-700/5">
@@ -118,7 +113,7 @@ export default function Home() {
             </div>
 
             <button type="submit" disabled={loading || !email || !password} className="mt-5 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
-              {loading ? "Please wait…" : mode === "signup" ? "Create Account" : "Log In"}
+              {loading ? "Please wait…" : mode === "signup" ? "Create Account" : "Log In →"}
             </button>
           </form>
 
