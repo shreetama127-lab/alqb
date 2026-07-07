@@ -7,8 +7,8 @@ export default function StudyLayout({ children }: { children: React.ReactNode })
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
         window.location.href = "/login";
       } else {
         setChecked(true);

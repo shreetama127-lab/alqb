@@ -5,13 +5,41 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 
 type Option = { letter: string; text: string; correct: boolean; explanation: string };
-type Question = { id: number; stem: string; topic?: string; options: Option[] };
+type Resource = { title: string; url: string };
+type Question = {
+  id: number;
+  stem: string;
+  topic?: string;
+  options: Option[];
+  resources?: Resource[] | null;
+};
 type AnswerRecord = Record<number, { selected: string; correct: boolean }>;
 
 function fmt(total: number) {
   const m = Math.floor(Math.abs(total) / 60);
   const s = Math.abs(total) % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const LETTERS = ["A", "B", "C", "D", "E", "F"];
+
+function prepareQuestions(data: Question[]): Question[] {
+  return shuffle(data).map((q) => ({
+    ...q,
+    options: shuffle(q.options).map((opt, i) => ({
+      ...opt,
+      letter: LETTERS[i] || opt.letter,
+    })),
+  }));
 }
 
 export default function QuestionPage() {
@@ -31,19 +59,18 @@ export default function QuestionPage() {
       const params = new URLSearchParams(window.location.search);
       const topicsParam = params.get("topics");
       const chosenTopics = topicsParam ? topicsParam.split("~~") : [];
+      const modulesParam = params.get("modules");
+      const chosenModules = modulesParam ? modulesParam.split("~~") : [];
+      const difficulty = params.get("difficulty");
 
-      let query = supabase.from("questions").select("id, stem, topic, options").order("id");
-      if (chosenTopics.length > 0) {
-        query = supabase
-          .from("questions")
-          .select("id, stem, topic, options")
-          .in("topic", chosenTopics)
-          .order("id");
-      }
+      let query = supabase.from("questions").select("id, stem, topic, options, resources");
+      if (chosenTopics.length > 0) query = query.in("topic", chosenTopics);
+      if (chosenModules.length > 0) query = query.in("module", chosenModules);
+      if (difficulty && difficulty !== "All") query = query.eq("difficulty", difficulty);
 
       const { data, error } = await query;
       if (error) console.error("Error loading questions:", error);
-      else if (data) setQuestions(data as Question[]);
+      else if (data) setQuestions(prepareQuestions(data as Question[]));
       setLoading(false);
     }
     loadQuestions();
@@ -64,8 +91,11 @@ export default function QuestionPage() {
 
   if (questions.length === 0)
     return (
-      <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6">
-        <p className="text-zinc-400">No questions found for these topics.</p>
+      <main className="mx-auto flex min-h-[70vh] max-w-2xl flex-col items-center justify-center gap-5 px-6 text-center">
+        <p className="text-zinc-400">No questions match these filters.</p>
+        <Link href="/study" className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
+          ← Change filters
+        </Link>
       </main>
     );
 
@@ -74,6 +104,8 @@ export default function QuestionPage() {
   const submitted = !!thisAnswer;
   const activeChoice = submitted ? thisAnswer.selected : pending;
   const isFlagged = !!flagged[q.id];
+  const showResources =
+    submitted && !thisAnswer.correct && q.resources && q.resources.length > 0;
 
   const answeredCount = Object.keys(answers).length;
   const correctCount = Object.values(answers).filter((a) => a.correct).length;
@@ -84,7 +116,6 @@ export default function QuestionPage() {
   const remaining = totalTime - elapsed;
   const timeUp = timed && remaining <= 0;
 
-  // ---- Summary screen ----
   if (finished) {
     const byTopic: Record<string, { answered: number; correct: number }> = {};
     Object.entries(answers).forEach(([i, a]) => {
@@ -143,6 +174,7 @@ export default function QuestionPage() {
                 setPending(null);
                 setElapsed(0);
                 setTimed(false);
+                setQuestions((qs) => prepareQuestions(qs));
               }}
               className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800"
             >
@@ -158,9 +190,7 @@ export default function QuestionPage() {
         </div>
       </main>
     );
-  }
-
-  function startTimed() {
+  }function startTimed() {
     setElapsed(0);
     setTimed(true);
   }
@@ -189,7 +219,6 @@ export default function QuestionPage() {
       if (error) console.error("Error saving answer:", error);
     }
 
-    // auto-finish if this was the last unanswered question
     if (Object.keys(updated).length === questions.length) {
       setFinished(true);
     }
@@ -265,6 +294,11 @@ export default function QuestionPage() {
         </div>
 
         <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-8 shadow-sm">
+          {q.topic && (
+            <span className="mb-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+              {q.topic}
+            </span>
+          )}
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-2xl font-bold leading-snug text-zinc-900">{q.stem}</h2>
             <button onClick={flagQuestion} disabled={isFlagged} title="Flag this question for review" className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>
@@ -287,6 +321,25 @@ export default function QuestionPage() {
               );
             })}
           </div>
+
+          {showResources && (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <p className="font-bold text-amber-800">📖 Need more help on this topic?</p>
+              <div className="mt-3 flex flex-col gap-2">
+                {q.resources!.map((r, i) => (
+                  <Link
+                    key={i}
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                  >
+                    {r.title} ↗
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-8 flex items-center justify-between">
