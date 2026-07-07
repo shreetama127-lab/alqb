@@ -104,8 +104,7 @@ export default function QuestionPage() {
   const submitted = !!thisAnswer;
   const activeChoice = submitted ? thisAnswer.selected : pending;
   const isFlagged = !!flagged[q.id];
-  const showResources =
-    submitted && !thisAnswer.correct && q.resources && q.resources.length > 0;
+  const showResources = submitted && q.resources && q.resources.length > 0;
 
   const answeredCount = Object.keys(answers).length;
   const correctCount = Object.values(answers).filter((a) => a.correct).length;
@@ -324,7 +323,8 @@ export default function QuestionPage() {
 
           {showResources && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <p className="font-bold text-amber-800">📖 Need more help on this topic?</p>
+              <p className="font-bold text-amber-800">📚 Further resources</p>
+              <p className="mt-1 text-xs font-semibold text-amber-700/70">Notes and videos for this topic</p>
               <div className="mt-3 flex flex-col gap-2">
                 {q.resources!.map((r, i) => (
                   <Link
@@ -340,6 +340,21 @@ export default function QuestionPage() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-zinc-900">💬 Discussion</h3>
+            <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
+              Coming soon
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-zinc-500">
+            Soon you&apos;ll be able to discuss this question with other students — ask for help, share tips, and explain tricky concepts.
+          </p>
+          <div className="mt-4 cursor-not-allowed rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-400">
+            Write a comment… (coming soon)
+          </div>
         </div>
 
         <div className="mt-8 flex items-center justify-between">
