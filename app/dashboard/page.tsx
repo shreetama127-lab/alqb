@@ -19,10 +19,6 @@ export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [streak, setStreak] = useState(0);
   const [questionCount, setQuestionCount] = useState<number | null>(null);
-  const [attemptedPct, setAttemptedPct] = useState(0);
-  const [daysStudied, setDaysStudied] = useState(0);
-  const [accuracy, setAccuracy] = useState(0);
-  const [hasAnswers, setHasAnswers] = useState(false);
 
   const banks: Bank[] = [
     {
@@ -77,27 +73,13 @@ export default function DashboardPage() {
 
       const { data: ans } = await supabase
         .from("answers")
-        .select("is_correct, question_id, created_at")
+        .select("created_at")
         .eq("user_id", userData.user.id);
 
       if (ans && ans.length > 0) {
-        setHasAnswers(true);
-
-        // % of the bank attempted (unique questions tried)
-        const unique = new Set(ans.map((a) => a.question_id)).size;
-        if (count && count > 0) setAttemptedPct(Math.round((unique / count) * 100));
-
-        // days studied (distinct days with any answer)
         const days = new Set(
           ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
         );
-        setDaysStudied(days.size);
-
-        // overall accuracy
-        const correct = ans.filter((a) => a.is_correct).length;
-        setAccuracy(Math.round((correct / ans.length) * 100));
-
-        // streak (consecutive days up to today)
         let count2 = 0;
         const cursor = new Date();
         if (!days.has(cursor.toISOString().slice(0, 10))) {
@@ -183,40 +165,6 @@ export default function DashboardPage() {
           )
         )}
       </div>
-
-      {hasAnswers && (
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
-            <span className="text-2xl">📈</span>
-            <div>
-              <p className="text-2xl font-extrabold text-zinc-900">{attemptedPct}%</p>
-              <p className="text-xs font-semibold text-zinc-500">of questions attempted</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
-            <span className="text-2xl">📅</span>
-            <div>
-              <p className="text-2xl font-extrabold text-zinc-900">{daysStudied}</p>
-              <p className="text-xs font-semibold text-zinc-500">day{daysStudied === 1 ? "" : "s"} studied</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
-            <span className="text-2xl">🎯</span>
-            <div>
-              <p className="text-2xl font-extrabold text-emerald-700">{accuracy}%</p>
-              <p className="text-xs font-semibold text-zinc-500">overall accuracy</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!hasAnswers && (
-        <div className="mt-10 rounded-3xl border border-emerald-100 bg-white p-10 text-center shadow-sm">
-          <p className="text-5xl">🌱</p>
-          <h2 className="mt-4 text-xl font-bold text-zinc-900">Ready when you are</h2>
-          <p className="mt-2 text-zinc-500">Answer your first few questions and your stats will appear here.</p>
-        </div>
-      )}
     </main>
   );
 }

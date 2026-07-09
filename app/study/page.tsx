@@ -4,52 +4,83 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 
-type QRow = { topic: string | null; module: string | null; difficulty: string | null };
-type TopicCount = { topic: string; count: number };
+type QRow = { id: number; topic: string | null; module: string | null; difficulty: string | null };
+type TopicInfo = { topic: string; count: number; done: number };
 
 const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
 
 export default function StudyPage() {
   const router = useRouter();
   const [rows, setRows] = useState<QRow[]>([]);
+  const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set());
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState("All");
   const [loading, setLoading] = useState(true);
 
+  // overall stats
+  const [attemptedPct, setAttemptedPct] = useState(0);
+  const [daysStudied, setDaysStudied] = useState(0);
+  const [accuracy, setAccuracy] = useState(0);
+  const [hasAnswers, setHasAnswers] = useState(false);
+
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from("questions").select("topic, module, difficulty");
-      if (data) setRows(data as QRow[]);
+      const { data: qData } = await supabase
+        .from("questions")
+        .select("id, topic, module, difficulty");
+      if (qData) setRows(qData as QRow[]);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user && qData) {
+        const { data: ans } = await supabase
+          .from("answers")
+          .select("is_correct, question_id, created_at")
+          .eq("user_id", userData.user.id);
+
+        if (ans && ans.length > 0) {
+          setHasAnswers(true);
+          const uniqueIds = new Set(ans.map((a) => a.question_id));
+          setAnsweredIds(uniqueIds);
+          setAttemptedPct(Math.round((uniqueIds.size / qData.length) * 100));
+
+          const days = new Set(
+            ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
+          );
+          setDaysStudied(days.size);
+
+          const correct = ans.filter((a) => a.is_correct).length;
+          setAccuracy(Math.round((correct / ans.length) * 100));
+        }
+      }
       setLoading(false);
     }
     load();
   }, []);
 
-  // Which modules exist in the data (M2–M6), sorted
   const modules = Array.from(new Set(rows.map((r) => r.module || "")))
     .filter(Boolean)
     .sort();
 
-  // Rows that pass the current module + difficulty filters
   const visibleRows = rows.filter((r) => {
     if (selectedModules.length > 0 && !selectedModules.includes(r.module || "")) return false;
     if (difficulty !== "All" && r.difficulty !== difficulty) return false;
     return true;
   });
 
-  // Topic counts within the filtered rows
-  const countsMap: Record<string, number> = {};
+  // topic counts + how many the user has completed in each
+  const infoMap: Record<string, TopicInfo> = {};
   const order: string[] = [];
   visibleRows.forEach((r) => {
     const t = r.topic || "Other";
-    if (!(t in countsMap)) {
-      countsMap[t] = 0;
+    if (!(t in infoMap)) {
+      infoMap[t] = { topic: t, count: 0, done: 0 };
       order.push(t);
     }
-    countsMap[t] += 1;
+    infoMap[t].count += 1;
+    if (answeredIds.has(r.id)) infoMap[t].done += 1;
   });
-  const topics: TopicCount[] = order.map((t) => ({ topic: t, count: countsMap[t] }));
+  const topics: TopicInfo[] = order.map((t) => infoMap[t]);
 
   function toggleTopic(topic: string) {
     setSelectedTopics((s) => (s.includes(topic) ? s.filter((t) => t !== topic) : [...s, topic]));
@@ -81,12 +112,36 @@ export default function StudyPage() {
   if (loading)
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6">
-        <p className="text-zinc-400">Loading topics…</p>
+        <p className="text-zinc-400">Loading…</p>
       </main>
-    );
-
-  return (
+    );return (
     <main className="mx-auto max-w-4xl px-6 py-10 pb-32">
+      {hasAnswers && (
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
+            <span className="text-2xl">📈</span>
+            <div>
+              <p className="text-2xl font-extrabold text-zinc-900">{attemptedPct}%</p>
+              <p className="text-xs font-semibold text-zinc-500">of questions attempted</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
+            <span className="text-2xl">📅</span>
+            <div>
+              <p className="text-2xl font-extrabold text-zinc-900">{daysStudied}</p>
+              <p className="text-xs font-semibold text-zinc-500">day{daysStudied === 1 ? "" : "s"} studied</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
+            <span className="text-2xl">🎯</span>
+            <div>
+              <p className="text-2xl font-extrabold text-emerald-700">{accuracy}%</p>
+              <p className="text-xs font-semibold text-zinc-500">overall accuracy</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Choose what to study</h1>
       <p className="mt-2 text-zinc-500">Filter by module and difficulty, pick your topics, or study everything.</p>
 
@@ -142,21 +197,27 @@ export default function StudyPage() {
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {topics.map((t) => {
           const isOn = selectedTopics.includes(t.topic);
+          const pct = t.count > 0 ? Math.round((t.done / t.count) * 100) : 0;
           return (
             <button
               key={t.topic}
               onClick={() => toggleTopic(t.topic)}
-              className={`flex items-center justify-between rounded-2xl border-2 px-5 py-4 text-left transition-all ${
+              className={`flex flex-col gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-all ${
                 isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"
               }`}
             >
-              <span className="flex items-center gap-3">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-md border-2 text-sm font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>
-                  ✓
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-3">
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-md border-2 text-sm font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>
+                    ✓
+                  </span>
+                  <span className="font-semibold text-zinc-800">{t.topic}</span>
                 </span>
-                <span className="font-semibold text-zinc-800">{t.topic}</span>
-              </span>
-              <span className="text-sm font-medium text-zinc-400">{t.count}</span>
+                <span className="text-sm font-medium text-zinc-400">{t.done}/{t.count}</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+              </div>
             </button>
           );
         })}
