@@ -15,6 +15,8 @@ type Question = {
 };
 type AnswerRecord = Record<number, { selected: string; correct: boolean }>;
 
+const REPORT_EMAIL = "info.alqb@gmail.com";
+
 function fmt(total: number) {
   const m = Math.floor(Math.abs(total) / 60);
   const s = Math.abs(total) % 60;
@@ -49,10 +51,15 @@ export default function QuestionPage() {
   const [answers, setAnswers] = useState<AnswerRecord>({});
   const [pending, setPending] = useState<string | null>(null);
   const [timed, setTimed] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [minutes, setMinutes] = useState(30);
+  const [dismissedTimeUp, setDismissedTimeUp] = useState(false);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [feedback, setFeedback] = useState<Record<number, "up" | "down">>({});
+  const [openExplain, setOpenExplain] = useState<Record<string, boolean>>({});
   const [finished, setFinished] = useState(false);
+  const [finalTime, setFinalTime] = useState(0);
 
   useEffect(() => {
     async function loadQuestions() {
@@ -77,10 +84,19 @@ export default function QuestionPage() {
   }, []);
 
   useEffect(() => {
-    if (!timed) return;
+    if (!timed || paused) return;
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
-  }, [timed]);
+  }, [timed, paused]);
+
+  // Auto-pause when the user leaves/switches the tab, resume when back.
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.hidden) setPaused(true);
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   if (loading)
     return (
@@ -104,6 +120,7 @@ export default function QuestionPage() {
   const submitted = !!thisAnswer;
   const activeChoice = submitted ? thisAnswer.selected : pending;
   const isFlagged = !!flagged[q.id];
+  const thisFeedback = feedback[q.id];
   const showResources = submitted && q.resources && q.resources.length > 0;
 
   const answeredCount = Object.keys(answers).length;
@@ -114,6 +131,12 @@ export default function QuestionPage() {
   const totalTime = minutes * 60;
   const remaining = totalTime - elapsed;
   const timeUp = timed && remaining <= 0;
+  const showTimeUpPopup = timeUp && !dismissedTimeUp && !finished;
+
+  function endSession() {
+    setFinalTime(elapsed);
+    setFinished(true);
+  }
 
   if (finished) {
     const byTopic: Record<string, { answered: number; correct: number }> = {};
@@ -126,8 +149,6 @@ export default function QuestionPage() {
     const topicList = Object.entries(byTopic)
       .map(([topic, v]) => ({ topic, ...v, pct: Math.round((v.correct / v.answered) * 100) }))
       .sort((a, b) => a.pct - b.pct);
-    const best = topicList.length ? topicList[topicList.length - 1] : null;
-    const worst = topicList.length ? topicList[0] : null;
 
     return (
       <main className="mx-auto max-w-2xl px-6 py-16">
@@ -136,35 +157,50 @@ export default function QuestionPage() {
           <h1 className="mt-4 text-3xl font-extrabold text-zinc-900">Session complete!</h1>
           <p className="mt-2 text-zinc-500">Here&apos;s how you did.</p>
 
-          <div className="mt-8 flex items-center justify-center gap-4">
-            <div className="flex-1 rounded-2xl bg-emerald-50 p-5">
-              <p className="text-4xl font-extrabold text-emerald-700">{correctCount}</p>
-              <p className="text-sm font-semibold text-emerald-700/70">Correct</p>
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-2xl bg-emerald-50 p-4">
+              <p className="text-3xl font-extrabold text-emerald-700">{correctCount}</p>
+              <p className="text-xs font-semibold text-emerald-700/70">Correct</p>
             </div>
-            <div className="flex-1 rounded-2xl bg-zinc-50 p-5">
-              <p className="text-4xl font-extrabold text-zinc-700">{answeredCount}</p>
-              <p className="text-sm font-semibold text-zinc-500">Answered</p>
+            <div className="rounded-2xl bg-red-50 p-4">
+              <p className="text-3xl font-extrabold text-red-500">{answeredCount - correctCount}</p>
+              <p className="text-xs font-semibold text-red-500/70">Incorrect</p>
             </div>
-            <div className="flex-1 rounded-2xl bg-emerald-50 p-5">
-              <p className="text-4xl font-extrabold text-emerald-700">{accuracy}%</p>
-              <p className="text-sm font-semibold text-emerald-700/70">Accuracy</p>
+            <div className="rounded-2xl bg-emerald-50 p-4">
+              <p className="text-3xl font-extrabold text-emerald-700">{accuracy}%</p>
+              <p className="text-xs font-semibold text-emerald-700/70">Accuracy</p>
+            </div>
+            <div className="rounded-2xl bg-zinc-50 p-4">
+              <p className="text-3xl font-extrabold text-zinc-700">{finalTime > 0 ? fmt(finalTime) : "—"}</p>
+              <p className="text-xs font-semibold text-zinc-500">Time taken</p>
             </div>
           </div>
 
-          {best && worst && answeredCount > 0 && (
-            <div className="mt-6 flex flex-col gap-2 text-sm">
-              {best.topic !== worst.topic && (
-                <p className="text-zinc-600">
-                  Strongest: <span className="font-bold text-emerald-700">{best.topic}</span> ({best.pct}%)
-                </p>
-              )}
-              <p className="text-zinc-600">
-                Focus next on: <span className="font-bold text-amber-600">{worst.topic}</span> ({worst.pct}%)
-              </p>
+          {topicList.length > 0 && (
+            <div className="mt-8 text-left">
+              <h2 className="text-lg font-bold text-zinc-900">Performance by topic</h2>
+              <div className="mt-4 flex flex-col gap-4">
+                {topicList.map((t) => {
+                  const colour = t.pct >= 70 ? "#059669" : t.pct >= 40 ? "#d97706" : "#dc2626";
+                  return (
+                    <div key={t.topic}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-zinc-700">{t.topic}</span>
+                        <span className="font-bold" style={{ color: colour }}>
+                          {t.pct}% <span className="font-normal text-zinc-400">({t.correct}/{t.answered})</span>
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                        <div className="h-full rounded-full" style={{ width: `${t.pct}%`, backgroundColor: colour }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
               onClick={() => {
                 setFinished(false);
@@ -173,6 +209,10 @@ export default function QuestionPage() {
                 setPending(null);
                 setElapsed(0);
                 setTimed(false);
+                setPaused(false);
+                setDismissedTimeUp(false);
+                setFinalTime(0);
+                setOpenExplain({});
                 setQuestions((qs) => prepareQuestions(qs));
               }}
               className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800"
@@ -183,7 +223,7 @@ export default function QuestionPage() {
               href="/dashboard"
               className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 text-lg font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300"
             >
-              View progress
+              Back to dashboard
             </Link>
           </div>
         </div>
@@ -191,10 +231,13 @@ export default function QuestionPage() {
     );
   }function startTimed() {
     setElapsed(0);
+    setPaused(false);
+    setDismissedTimeUp(false);
     setTimed(true);
   }
   function stopTimed() {
     setTimed(false);
+    setPaused(false);
     setElapsed(0);
   }
   function chooseOption(letter: string) {
@@ -219,6 +262,7 @@ export default function QuestionPage() {
     }
 
     if (Object.keys(updated).length === questions.length) {
+      setFinalTime(elapsed);
       setFinished(true);
     }
   }
@@ -237,17 +281,64 @@ export default function QuestionPage() {
     else setFlagged((f) => ({ ...f, [q.id]: true }));
   }
 
+  function giveFeedback(kind: "up" | "down") {
+    setFeedback((f) => ({ ...f, [q.id]: kind }));
+  }
+
+  function reportQuestion() {
+    const subject = encodeURIComponent("ALQB question report — Question #" + q.id);
+    const body = encodeURIComponent(
+      "I'd like to report a problem with this question.\n\nQuestion ID: " +
+        q.id +
+        "\nTopic: " +
+        (q.topic || "") +
+        "\n\nWhat's wrong:\n"
+    );
+    window.location.href = "mailto:" + REPORT_EMAIL + "?subject=" + subject + "&body=" + body;
+  }
+
+  function toggleExplain(letter: string) {
+    const key = q.id + "-" + letter;
+    setOpenExplain((o) => ({ ...o, [key]: !o[key] }));
+  }
+
   function goToQuestion(i: number) {
     setIndex(i);
     setPending(null);
   }
   function nextQuestion() {
     if (index + 1 < questions.length) goToQuestion(index + 1);
-    else setFinished(true);
+    else endSession();
   }
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10 lg:flex-row">
+      {showTimeUpPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
+            <p className="text-5xl">⏰</p>
+            <h2 className="mt-4 text-2xl font-extrabold text-zinc-900">Time&apos;s up!</h2>
+            <p className="mt-2 text-zinc-500">
+              You&apos;ve answered {answeredCount} of {questions.length} questions. Keep going, or finish and see your results?
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <button
+                onClick={() => setDismissedTimeUp(true)}
+                className="rounded-full border-2 border-emerald-200 bg-white px-6 py-3 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400"
+              >
+                Keep going
+              </button>
+              <button
+                onClick={endSession}
+                className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800"
+              >
+                Finish now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1">
         <div className="mb-5 flex items-center justify-between rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm">
           {timed ? (
@@ -256,12 +347,19 @@ export default function QuestionPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Elapsed</p>
                 <p className="text-xl font-extrabold text-zinc-700">{fmt(elapsed)}</p>
               </div>
-              <button onClick={stopTimed} className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">
-                End timer
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPaused((p) => !p)} className={`rounded-full px-5 py-1.5 text-sm font-bold transition-colors ${paused ? "bg-emerald-700 text-white hover:bg-emerald-800" : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>
+                  {paused ? "▶ Resume" : "⏸ Pause"}
+                </button>
+                <button onClick={stopTimed} className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">
+                  End timer
+                </button>
+              </div>
               <div className="text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{timeUp ? "Time's up" : "Remaining"}</p>
-                <p className={`text-xl font-extrabold ${remaining <= 60 ? "text-red-600" : "text-emerald-700"}`}>{timeUp ? "0:00" : fmt(remaining)}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{timeUp ? "Overtime" : paused ? "Paused" : "Remaining"}</p>
+                <p className={`text-xl font-extrabold ${timeUp ? "text-amber-600" : remaining <= 60 ? "text-red-600" : "text-emerald-700"}`}>
+                  {timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}
+                </p>
               </div>
             </>
           ) : (
@@ -298,28 +396,52 @@ export default function QuestionPage() {
               {q.topic}
             </span>
           )}
-          <div className="flex items-start justify-between gap-4">
-            <h2 className="text-2xl font-bold leading-snug text-zinc-900">{q.stem}</h2>
-            <button onClick={flagQuestion} disabled={isFlagged} title="Flag this question for review" className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>
-              {isFlagged ? "⚑ Flagged" : "⚑ Flag"}
-            </button>
-          </div>
+          <h2 className="text-2xl font-bold leading-snug text-zinc-900">{q.stem}</h2>
 
           <div className="mt-6 flex flex-col gap-3">
             {q.options.map((option) => {
               const isActive = activeChoice === option.letter;
+              const isPicked = submitted && thisAnswer.selected === option.letter;
+              const revealOpen = isPicked || option.correct || openExplain[q.id + "-" + option.letter];
               let style = "border-zinc-200 hover:border-emerald-400 hover:bg-emerald-50/50";
               if (submitted && option.correct) style = "border-emerald-500 bg-emerald-50";
               else if (submitted && isActive) style = "border-red-300 bg-red-50";
               else if (isActive) style = "border-emerald-500 bg-emerald-50";
               return (
-                <button key={option.letter} onClick={() => chooseOption(option.letter)} className={`rounded-2xl border-2 px-5 py-4 text-left text-lg transition-all ${style}`}>
-                  <span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}
-                  {submitted && <p className="mt-2 text-sm text-zinc-600">{option.explanation}</p>}
-                </button>
+                <div key={option.letter} className={`rounded-2xl border-2 px-5 py-4 text-lg transition-all ${style}`}>
+                  <button onClick={() => chooseOption(option.letter)} className="w-full text-left" disabled={submitted}>
+                    <span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}
+                  </button>
+                  {submitted && (isPicked || option.correct) && (
+                    <p className="mt-2 text-sm text-zinc-600">{option.explanation}</p>
+                  )}
+                  {submitted && !isPicked && !option.correct && (
+                    <div className="mt-2">
+                      <button onClick={() => toggleExplain(option.letter)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-900">
+                        {revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}
+                      </button>
+                      {revealOpen && <p className="mt-2 text-sm text-zinc-600">{option.explanation}</p>}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
+
+          {submitted && (
+            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-5">
+              <span className="text-sm font-semibold text-zinc-500">Was this question helpful?</span>
+              <button onClick={() => giveFeedback("up")} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${thisFeedback === "up" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:border-emerald-300"}`}>
+                👍 Yes
+              </button>
+              <button onClick={() => giveFeedback("down")} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${thisFeedback === "down" ? "border-red-300 bg-red-50 text-red-600" : "border-zinc-200 text-zinc-500 hover:border-red-300"}`}>
+                👎 No
+              </button>
+              <button onClick={reportQuestion} className="ml-auto rounded-full border border-zinc-200 px-4 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:border-amber-400 hover:text-amber-600">
+                ⚠ Report
+              </button>
+            </div>
+          )}
 
           {showResources && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
@@ -358,7 +480,7 @@ export default function QuestionPage() {
         </div>
 
         <div className="mt-8 flex items-center justify-between">
-          <button onClick={() => setFinished(true)} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
+          <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
             Finish session
           </button>
           {!submitted ? (
@@ -375,8 +497,11 @@ export default function QuestionPage() {
 
       <aside className="lg:w-60">
         <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm lg:sticky lg:top-20">
+          <button onClick={flagQuestion} disabled={isFlagged} className={`mb-4 w-full rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-500 hover:border-red-300 hover:text-red-500"}`}>
+            {isFlagged ? "⚑ Flagged" : "⚑ Flag this question"}
+          </button>
           <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
-          <div className="mt-4 flex max-h-[60vh] flex-col gap-1.5 overflow-y-auto pr-1">
+          <div className="mt-4 flex max-h-[55vh] flex-col gap-1.5 overflow-y-auto pr-1">
             {questions.map((_, i) => {
               const a = answers[i];
               const isCurrent = i === index;
