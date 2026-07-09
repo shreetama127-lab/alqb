@@ -89,7 +89,7 @@ export default function QuestionPage() {
     return () => clearInterval(id);
   }, [timed, paused]);
 
-  // Auto-pause when the user leaves/switches the tab, resume when back.
+  // Auto-pause when the user leaves/switches the tab.
   useEffect(() => {
     function handleVisibility() {
       if (document.hidden) setPaused(true);
@@ -402,7 +402,7 @@ export default function QuestionPage() {
             {q.options.map((option) => {
               const isActive = activeChoice === option.letter;
               const isPicked = submitted && thisAnswer.selected === option.letter;
-              const revealOpen = isPicked || option.correct || openExplain[q.id + "-" + option.letter];
+              const revealOpen = openExplain[q.id + "-" + option.letter];
               let style = "border-zinc-200 hover:border-emerald-400 hover:bg-emerald-50/50";
               if (submitted && option.correct) style = "border-emerald-500 bg-emerald-50";
               else if (submitted && isActive) style = "border-red-300 bg-red-50";
@@ -502,14 +502,18 @@ export default function QuestionPage() {
           </button>
           <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
           <div className="mt-4 flex max-h-[55vh] flex-col gap-1.5 overflow-y-auto pr-1">
-            {questions.map((_, i) => {
+            {questions.map((qq, i) => {
               const a = answers[i];
               const isCurrent = i === index;
+              const qFlagged = !!flagged[qq.id];
               let dot = "bg-zinc-200";
               if (a) dot = a.correct ? "bg-emerald-500" : "bg-red-400";
               return (
                 <button key={i} onClick={() => goToQuestion(i)} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isCurrent ? "bg-emerald-50 font-bold text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"}`}>
-                  <span>Question {i + 1}</span>
+                  <span className="flex items-center gap-1.5">
+                    Question {i + 1}
+                    {qFlagged && <span className="text-red-500">⚑</span>}
+                  </span>
                   <span className={`h-3.5 w-3.5 rounded-full ${dot}`} />
                 </button>
               );
