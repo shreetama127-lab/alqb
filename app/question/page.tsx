@@ -58,6 +58,7 @@ export default function QuestionPage() {
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
   const [feedback, setFeedback] = useState<Record<number, "up" | "down">>({});
   const [openExplain, setOpenExplain] = useState<Record<string, boolean>>({});
+  const [stats, setStats] = useState<Record<number, { total: number; correct: number }>>({});
   const [finished, setFinished] = useState(false);
   const [finalTime, setFinalTime] = useState(0);
 
@@ -89,7 +90,6 @@ export default function QuestionPage() {
     return () => clearInterval(id);
   }, [timed, paused]);
 
-  // Auto-pause when the user leaves/switches the tab.
   useEffect(() => {
     function handleVisibility() {
       if (document.hidden) setPaused(true);
@@ -121,6 +121,7 @@ export default function QuestionPage() {
   const activeChoice = submitted ? thisAnswer.selected : pending;
   const isFlagged = !!flagged[q.id];
   const thisFeedback = feedback[q.id];
+  const thisStats = stats[q.id];
   const showResources = submitted && q.resources && q.resources.length > 0;
 
   const answeredCount = Object.keys(answers).length;
@@ -244,6 +245,21 @@ export default function QuestionPage() {
     if (!submitted) setPending(letter);
   }
 
+  async function loadStats(questionId: number) {
+    const { data, error } = await supabase.rpc("question_correct_pct", { qid: questionId });
+    if (error) {
+      console.error("Error loading question stats:", error);
+      return;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      setStats((s) => ({
+        ...s,
+        [questionId]: { total: Number(row.total), correct: Number(row.correct) },
+      }));
+    }
+  }
+
   async function submitAnswer() {
     if (!pending) return;
     const chosen = q.options.find((o) => o.letter === pending);
@@ -260,6 +276,8 @@ export default function QuestionPage() {
       });
       if (error) console.error("Error saving answer:", error);
     }
+
+    await loadStats(q.id);
 
     if (Object.keys(updated).length === questions.length) {
       setFinalTime(elapsed);
@@ -427,6 +445,14 @@ export default function QuestionPage() {
               );
             })}
           </div>
+
+          {submitted && thisStats && (
+            <p className="mt-5 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
+              {thisStats.total <= 1
+                ? "🌍 You're the first to answer this one!"
+                : "🌍 " + Math.round((thisStats.correct / thisStats.total) * 100) + "% of students got this right (" + thisStats.total + " answers)"}
+            </p>
+          )}
 
           {submitted && (
             <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-5">
