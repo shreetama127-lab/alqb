@@ -16,9 +16,13 @@ type Bank = {
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("there");
   const [streak, setStreak] = useState(0);
   const [questionCount, setQuestionCount] = useState<number | null>(null);
+  const [examDate, setExamDate] = useState<string | null>(null);
+  const [dateInput, setDateInput] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
 
   const banks: Bank[] = [
     {
@@ -64,6 +68,7 @@ export default function DashboardPage() {
         return;
       }
       setLoggedIn(true);
+      setUserId(userData.user.id);
       setFirstName(userData.user.user_metadata?.first_name || "there");
 
       const { count } = await supabase
@@ -91,10 +96,47 @@ export default function DashboardPage() {
         }
         setStreak(count2);
       }
+
+      const { data: exam } = await supabase
+        .from("exam_dates")
+        .select("exam_date")
+        .eq("user_id", userData.user.id)
+        .maybeSingle();
+      if (exam?.exam_date) setExamDate(exam.exam_date);
+
       setLoading(false);
     }
     loadStats();
   }, []);
+
+  async function saveExamDate() {
+    if (!dateInput || !userId) return;
+    setSavingDate(true);
+    const { error } = await supabase
+      .from("exam_dates")
+      .upsert({ user_id: userId, exam_date: dateInput, updated_at: new Date().toISOString() });
+    if (error) console.error("Error saving exam date:", error);
+    else setExamDate(dateInput);
+    setSavingDate(false);
+  }
+
+  async function clearExamDate() {
+    if (!userId) return;
+    const { error } = await supabase.from("exam_dates").delete().eq("user_id", userId);
+    if (error) console.error("Error clearing exam date:", error);
+    else {
+      setExamDate(null);
+      setDateInput("");
+    }
+  }
+
+  function daysUntil(dateStr: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const exam = new Date(dateStr + "T00:00:00");
+    const diff = Math.round((exam.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
+  }
 
   if (loading)
     return (
@@ -111,7 +153,15 @@ export default function DashboardPage() {
           Log In
         </Link>
       </main>
-    );
+    );const days = examDate ? daysUntil(examDate) : null;
+  const prettyDate = examDate
+    ? new Date(examDate + "T00:00:00").toLocaleDateString(undefined, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -163,6 +213,63 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm font-semibold text-zinc-400">{bank.subtitle}</p>
             </div>
           )
+        )}
+      </div>
+
+      <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-7 shadow-sm">
+        {examDate && days !== null ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">📆</span>
+              <div>
+                {days > 0 ? (
+                  <p className="text-2xl font-extrabold text-zinc-900">
+                    <span className="text-emerald-700">{days}</span> day{days === 1 ? "" : "s"} until your exam
+                  </p>
+                ) : days === 0 ? (
+                  <p className="text-2xl font-extrabold text-emerald-700">Your exam is today — good luck! 🍀</p>
+                ) : (
+                  <p className="text-2xl font-extrabold text-zinc-900">Exam date has passed</p>
+                )}
+                <p className="mt-1 text-sm font-semibold text-zinc-500">{prettyDate}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateInput}
+                onChange={(e) => setDateInput(e.target.value)}
+                className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-emerald-400"
+              />
+              <button onClick={saveExamDate} disabled={!dateInput || savingDate} className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
+                Update
+              </button>
+              <button onClick={clearExamDate} className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">📆</span>
+              <div>
+                <p className="text-lg font-bold text-zinc-900">Set your exam date</p>
+                <p className="mt-1 text-sm text-zinc-500">See a countdown to keep you on track.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateInput}
+                onChange={(e) => setDateInput(e.target.value)}
+                className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-emerald-400"
+              />
+              <button onClick={saveExamDate} disabled={!dateInput || savingDate} className="rounded-full bg-emerald-700 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
+                {savingDate ? "Saving…" : "Set date"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </main>
