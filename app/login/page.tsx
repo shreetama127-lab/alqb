@@ -52,10 +52,16 @@ export default function LoginPage() {
             />
           </div>
 
+          <div className="mt-2 text-right">
+            <Link href="/reset-password" className="text-sm font-semibold text-emerald-700 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit"
             disabled={loading || !email || !password}
-            className="mt-5 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
+            className="mt-4 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
           >
             {loading ? "Please wait…" : "Log In"}
           </button>
