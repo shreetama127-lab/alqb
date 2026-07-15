@@ -23,6 +23,11 @@ function fmt(total: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// Split explanation text on blank lines so it renders as readable paragraphs.
+function paragraphs(text: string) {
+  return (text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -42,6 +47,17 @@ function prepareQuestions(data: Question[]): Question[] {
       letter: LETTERS[i] || opt.letter,
     })),
   }));
+}
+
+function ExplanationText({ text }: { text: string }) {
+  const paras = paragraphs(text);
+  return (
+    <div className="mt-2 flex flex-col gap-2 text-sm text-zinc-600">
+      {paras.map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </div>
+  );
 }
 
 export default function QuestionPage() {
@@ -430,20 +446,33 @@ export default function QuestionPage() {
                   <button onClick={() => chooseOption(option.letter)} className="w-full text-left" disabled={submitted}>
                     <span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}
                   </button>
-                  {submitted && (isPicked || option.correct) && (
-                    <p className="mt-2 text-sm text-zinc-600">{option.explanation}</p>
-                  )}
+                  {submitted && (isPicked || option.correct) && <ExplanationText text={option.explanation} />}
                   {submitted && !isPicked && !option.correct && (
                     <div className="mt-2">
                       <button onClick={() => toggleExplain(option.letter)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-900">
                         {revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}
                       </button>
-                      {revealOpen && <p className="mt-2 text-sm text-zinc-600">{option.explanation}</p>}
+                      {revealOpen && <ExplanationText text={option.explanation} />}
                     </div>
                   )}
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-6 flex items-center justify-between border-t border-zinc-100 pt-5">
+            <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-2.5 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
+              Finish
+            </button>
+            {!submitted ? (
+              <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-10 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
+                Submit Answer
+              </button>
+            ) : (
+              <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-10 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
+                {index + 1 < questions.length ? "Next Question →" : "Finish →"}
+              </button>
+            )}
           </div>
 
           {submitted && thisStats && (
@@ -455,7 +484,7 @@ export default function QuestionPage() {
           )}
 
           {submitted && (
-            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-5">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-zinc-500">Was this question helpful?</span>
               <button onClick={() => giveFeedback("up")} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${thisFeedback === "up" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:border-emerald-300"}`}>
                 👍 Yes
@@ -503,21 +532,6 @@ export default function QuestionPage() {
           <div className="mt-4 cursor-not-allowed rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-400">
             Write a comment… (coming soon)
           </div>
-        </div>
-
-        <div className="mt-8 flex items-center justify-between">
-          <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
-            Finish session
-          </button>
-          {!submitted ? (
-            <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
-              Submit Answer
-            </button>
-          ) : (
-            <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-              {index + 1 < questions.length ? "Next Question →" : "Finish →"}
-            </button>
-          )}
         </div>
       </div>
 
