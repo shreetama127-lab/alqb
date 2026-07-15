@@ -8,17 +8,33 @@ type QRow = { id: number; topic: string | null; module: string | null; difficult
 type TopicInfo = { topic: string; count: number; done: number };
 
 const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
+const YIELDS = ["All", "High", "Medium", "Low"];
+const AMOUNTS = ["10", "20", "50", "All"];
+const STATUSES = [
+  { value: "all", label: "All questions" },
+  { value: "unattempted", label: "Unattempted" },
+  { value: "correct", label: "Previously correct" },
+  { value: "incorrect", label: "Previously incorrect" },
+];
 
 export default function StudyPage() {
   const router = useRouter();
   const [rows, setRows] = useState<QRow[]>([]);
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set());
+  const [correctIds, setCorrectIds] = useState<Set<number>>(new Set());
+  const [incorrectIds, setIncorrectIds] = useState<Set<number>>(new Set());
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [showPopup, setShowPopup] = useState(false);
 
-  // overall stats
+  // pop-up choices
+  const [amount, setAmount] = useState("20");
+  const [popDifficulty, setPopDifficulty] = useState("All");
+  const [popYield, setPopYield] = useState("All");
+  const [status, setStatus] = useState("all");
+
   const [attemptedPct, setAttemptedPct] = useState(0);
   const [daysStudied, setDaysStudied] = useState(0);
   const [accuracy, setAccuracy] = useState(0);
@@ -42,13 +58,26 @@ export default function StudyPage() {
           setHasAnswers(true);
           const uniqueIds = new Set(ans.map((a) => a.question_id));
           setAnsweredIds(uniqueIds);
-          setAttemptedPct(Math.round((uniqueIds.size / qData.length) * 100));
 
+          // most recent correctness per question
+          const latest: Record<number, boolean> = {};
+          ans.forEach((a) => {
+            latest[a.question_id] = a.is_correct;
+          });
+          const cSet = new Set<number>();
+          const iSet = new Set<number>();
+          Object.entries(latest).forEach(([qid, ok]) => {
+            if (ok) cSet.add(Number(qid));
+            else iSet.add(Number(qid));
+          });
+          setCorrectIds(cSet);
+          setIncorrectIds(iSet);
+
+          setAttemptedPct(Math.round((uniqueIds.size / qData.length) * 100));
           const days = new Set(
             ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
           );
           setDaysStudied(days.size);
-
           const correct = ans.filter((a) => a.is_correct).length;
           setAccuracy(Math.round((correct / ans.length) * 100));
         }
@@ -68,7 +97,6 @@ export default function StudyPage() {
     return true;
   });
 
-  // topic counts + how many the user has completed in each
   const infoMap: Record<string, TopicInfo> = {};
   const order: string[] = [];
   visibleRows.forEach((r) => {
@@ -96,16 +124,16 @@ export default function StudyPage() {
   }
 
   const totalVisible = topics.reduce((s, t) => s + t.count, 0);
-  const selectedCount = topics
-    .filter((t) => selectedTopics.includes(t.topic))
-    .reduce((sum, t) => sum + t.count, 0);
 
-  function startSession() {
+  function launchSession() {
     const params = new URLSearchParams();
     const activeTopics = selectedTopics.filter((t) => topics.some((x) => x.topic === t));
     if (activeTopics.length > 0) params.set("topics", activeTopics.join("~~"));
     if (selectedModules.length > 0) params.set("modules", selectedModules.join("~~"));
-    if (difficulty !== "All") params.set("difficulty", difficulty);
+    if (popDifficulty !== "All") params.set("difficulty", popDifficulty);
+    if (popYield !== "All") params.set("yield", popYield);
+    if (amount !== "All") params.set("limit", amount);
+    if (status !== "all") params.set("status", status);
     router.push("/question?" + params.toString());
   }
 
@@ -228,13 +256,81 @@ export default function StudyPage() {
           <p className="font-semibold text-zinc-600">
             {selectedTopics.length === 0
               ? `All shown topics · ${totalVisible} questions`
-              : `${selectedCount} questions selected`}
+              : `${selectedTopics.length} topic${selectedTopics.length === 1 ? "" : "s"} selected`}
           </p>
-          <button onClick={startSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
+          <button onClick={() => setShowPopup(true)} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
             Start Session →
           </button>
         </div>
       </div>
+
+      {showPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-extrabold text-zinc-900">Session options</h2>
+              <button onClick={() => setShowPopup(false)} className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:text-zinc-600">
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {AMOUNTS.map((a) => (
+                    <button key={a} onClick={() => setAmount(a)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === a ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DIFFICULTIES.map((d) => (
+                    <button key={d} onClick={() => setPopDifficulty(d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${popDifficulty === d ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield (how likely to come up)</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {YIELDS.map((y) => (
+                    <button key={y} onClick={() => setPopYield(y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${popYield === y ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Question status</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {STATUSES.map((s) => (
+                    <button key={s.value} onClick={() => setStatus(s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${status === s.value ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button onClick={() => setShowPopup(false)} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
+                Back
+              </button>
+              <button onClick={launchSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
+                Start Session →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
