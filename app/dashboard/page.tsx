@@ -3,15 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-
-type Bank = {
-  id: string;
-  title: string;
-  subtitle: string;
-  emoji: string;
-  href: string;
-  live: boolean;
-};
+import { PLANS, FREE_PLAN_IDS } from "@/app/subscriptions/page";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -21,44 +13,10 @@ export default function DashboardPage() {
   const [streak, setStreak] = useState(0);
   const [questionCount, setQuestionCount] = useState<number | null>(null);
   const [noteCount, setNoteCount] = useState(0);
+  const [activeIds, setActiveIds] = useState<string[]>([]);
   const [examDate, setExamDate] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState("");
   const [savingDate, setSavingDate] = useState(false);
-
-  const banks: Bank[] = [
-    {
-      id: "ocr-biology",
-      title: "OCR A-Level Biology",
-      subtitle: questionCount ? `${questionCount} questions` : "Question bank",
-      emoji: "🧬",
-      href: "/study",
-      live: true,
-    },
-    {
-      id: "aqa-biology",
-      title: "AQA A-Level Biology",
-      subtitle: "Coming soon",
-      emoji: "🌿",
-      href: "#",
-      live: false,
-    },
-    {
-      id: "chemistry",
-      title: "A-Level Chemistry",
-      subtitle: "Coming soon",
-      emoji: "🧪",
-      href: "#",
-      live: false,
-    },
-    {
-      id: "ib-biology",
-      title: "IB Biology",
-      subtitle: "Coming soon",
-      emoji: "🌍",
-      href: "#",
-      live: false,
-    },
-  ];
 
   useEffect(() => {
     async function loadStats() {
@@ -82,6 +40,14 @@ export default function DashboardPage() {
         .select("question_id", { count: "exact", head: true })
         .eq("user_id", userData.user.id);
       if (nCount) setNoteCount(nCount);
+
+      const { data: subs } = await supabase
+        .from("subscriptions")
+        .select("plan_id, status")
+        .eq("user_id", userData.user.id)
+        .eq("status", "active");
+      const owned = (subs || []).map((s) => s.plan_id);
+      setActiveIds([...new Set([...owned, ...FREE_PLAN_IDS])]);
 
       const { data: ans } = await supabase
         .from("answers")
@@ -170,6 +136,8 @@ export default function DashboardPage() {
       })
     : "";
 
+  const myPlans = PLANS.filter((p) => activeIds.includes(p.id));
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -205,34 +173,31 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
-        {banks.map((bank) =>
-          bank.live ? (
-            <Link
-              key={bank.id}
-              href={bank.href}
-              className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg"
-            >
-              <p className="text-4xl">{bank.emoji}</p>
-              <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">
-                {bank.title}
-              </h3>
-              <p className="mt-1 text-sm font-semibold text-zinc-500">{bank.subtitle}</p>
-              <p className="mt-4 text-sm font-bold text-emerald-700">Start studying →</p>
-            </Link>
-          ) : (
-            <div
-              key={bank.id}
-              className="relative rounded-3xl border-2 border-zinc-100 bg-zinc-50 p-7 opacity-70"
-            >
-              <span className="absolute right-5 top-5 rounded-full bg-zinc-200 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Coming soon
-              </span>
-              <p className="text-4xl grayscale">{bank.emoji}</p>
-              <h3 className="mt-4 text-xl font-extrabold text-zinc-400">{bank.title}</h3>
-              <p className="mt-1 text-sm font-semibold text-zinc-400">{bank.subtitle}</p>
-            </div>
-          )
-        )}
+        {myPlans.map((plan) => (
+          <Link
+            key={plan.id}
+            href="/study"
+            className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg"
+          >
+            <p className="text-4xl">{plan.emoji}</p>
+            <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">
+              {plan.title}
+            </h3>
+            <p className="mt-1 text-sm font-semibold text-zinc-500">
+              {questionCount ? `${questionCount} questions` : "Question bank"}
+            </p>
+            <p className="mt-4 text-sm font-bold text-emerald-700">Start studying →</p>
+          </Link>
+        ))}
+
+        <Link
+          href="/subscriptions"
+          className="group flex flex-col justify-center rounded-3xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-7 text-center transition-all hover:-translate-y-1 hover:border-emerald-400"
+        >
+          <p className="text-4xl">➕</p>
+          <h3 className="mt-4 text-xl font-extrabold text-emerald-700">Add a question bank</h3>
+          <p className="mt-1 text-sm font-semibold text-zinc-500">Browse all subscriptions</p>
+        </Link>
       </div>
 
       <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-7 shadow-sm">
