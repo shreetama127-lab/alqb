@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [streak, setStreak] = useState(0);
   const [questionCount, setQuestionCount] = useState<number | null>(null);
+  const [noteCount, setNoteCount] = useState(0);
   const [examDate, setExamDate] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState("");
   const [savingDate, setSavingDate] = useState(false);
@@ -75,6 +76,12 @@ export default function DashboardPage() {
         .from("questions")
         .select("id", { count: "exact", head: true });
       if (count) setQuestionCount(count);
+
+      const { count: nCount } = await supabase
+        .from("notes")
+        .select("question_id", { count: "exact", head: true })
+        .eq("user_id", userData.user.id);
+      if (nCount) setNoteCount(nCount);
 
       const { data: ans } = await supabase
         .from("answers")
@@ -172,17 +179,29 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-2 text-lg text-zinc-500">What would you like to study today?</p>
         </div>
-        {streak > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3">
-            <span className="text-3xl">🔥</span>
-            <div>
-              <p className="text-2xl font-extrabold text-orange-600">{streak}</p>
-              <p className="text-xs font-semibold text-orange-600/70">
-                day{streak === 1 ? "" : "s"} in a row
-              </p>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/notes"
+            className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 py-3 font-bold text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400"
+          >
+            <span className="text-2xl">📝</span>
+            <span>
+              Review notes
+              {noteCount > 0 && <span className="ml-1 text-sm font-semibold text-zinc-400">({noteCount})</span>}
+            </span>
+          </Link>
+          {streak > 0 && (
+            <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3">
+              <span className="text-3xl">🔥</span>
+              <div>
+                <p className="text-2xl font-extrabold text-orange-600">{streak}</p>
+                <p className="text-xs font-semibold text-orange-600/70">
+                  day{streak === 1 ? "" : "s"} in a row
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
