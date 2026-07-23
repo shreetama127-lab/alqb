@@ -4,14 +4,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 
-type QRow = { id: number; topic: string | null; module: string | null; difficulty: string | null };
+type QRow = { id: number; topic: string | null; module: string | null };
 type TopicInfo = { topic: string; count: number; done: number };
+type ModuleGroup = { module: string; title: string; topics: TopicInfo[]; count: number; done: number };
 
-const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
-const YIELDS = ["All", "High", "Medium", "Low"];
-const AMOUNTS = ["10", "20", "50", "All"];
+const MODULE_TITLES: Record<string, string> = {
+  M2: "Module 2 — Foundations in Biology",
+  M3: "Module 3 — Exchange and Transport",
+  M4: "Module 4 — Biodiversity, Evolution and Disease",
+  M5: "Module 5 — Communication, Homeostasis and Energy",
+  M6: "Module 6 — Genetics, Evolution and Ecosystems",
+};
+
+const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+const YIELDS = ["High", "Medium", "Low"];
 const STATUSES = [
-  { value: "all", label: "All questions" },
   { value: "unattempted", label: "Unattempted" },
   { value: "correct", label: "Previously correct" },
   { value: "incorrect", label: "Previously incorrect" },
@@ -21,19 +28,15 @@ export default function StudyPage() {
   const router = useRouter();
   const [rows, setRows] = useState<QRow[]>([]);
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set());
-  const [correctIds, setCorrectIds] = useState<Set<number>>(new Set());
-  const [incorrectIds, setIncorrectIds] = useState<Set<number>>(new Set());
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [difficulty, setDifficulty] = useState("All");
+  const [openModules, setOpenModules] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPopup, setShowPopup] = useState(false);
 
-  // pop-up choices
-  const [amount, setAmount] = useState("20");
-  const [popDifficulty, setPopDifficulty] = useState("All");
-  const [popYield, setPopYield] = useState("All");
-  const [status, setStatus] = useState("all");
+  const [amount, setAmount] = useState(20);
+  const [difficulties, setDifficulties] = useState<string[]>([]);
+  const [yields, setYields] = useState<string[]>([]);
+  const [statuses, setStatuses] = useState<string[]>([]);
 
   const [attemptedPct, setAttemptedPct] = useState(0);
   const [daysStudied, setDaysStudied] = useState(0);
@@ -42,10 +45,13 @@ export default function StudyPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: qData } = await supabase
-        .from("questions")
-        .select("id, topic, module, difficulty");
-      if (qData) setRows(qData as QRow[]);
+      const { data: qData } = await supabase.from("questions").select("id, topic, module");
+      if (qData) {
+        setRows(qData as QRow[]);
+        // every topic selected by default
+        const allTopics = Array.from(new Set((qData as QRow[]).map((r) => r.topic || "Other")));
+        setSelectedTopics(allTopics);
+      }
 
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user && qData) {
@@ -58,21 +64,6 @@ export default function StudyPage() {
           setHasAnswers(true);
           const uniqueIds = new Set(ans.map((a) => a.question_id));
           setAnsweredIds(uniqueIds);
-
-          // most recent correctness per question
-          const latest: Record<number, boolean> = {};
-          ans.forEach((a) => {
-            latest[a.question_id] = a.is_correct;
-          });
-          const cSet = new Set<number>();
-          const iSet = new Set<number>();
-          Object.entries(latest).forEach(([qid, ok]) => {
-            if (ok) cSet.add(Number(qid));
-            else iSet.add(Number(qid));
-          });
-          setCorrectIds(cSet);
-          setIncorrectIds(iSet);
-
           setAttemptedPct(Math.round((uniqueIds.size / qData.length) * 100));
           const days = new Set(
             ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
@@ -87,53 +78,65 @@ export default function StudyPage() {
     load();
   }, []);
 
-  const modules = Array.from(new Set(rows.map((r) => r.module || "")))
-    .filter(Boolean)
-    .sort();
-
-  const visibleRows = rows.filter((r) => {
-    if (selectedModules.length > 0 && !selectedModules.includes(r.module || "")) return false;
-    if (difficulty !== "All" && r.difficulty !== difficulty) return false;
-    return true;
-  });
-
-  const infoMap: Record<string, TopicInfo> = {};
-  const order: string[] = [];
-  visibleRows.forEach((r) => {
+  // build module → topics structure
+  const groups: ModuleGroup[] = [];
+  const moduleOrder: string[] = [];
+  const byModule: Record<string, Record<string, TopicInfo>> = {};
+  rows.forEach((r) => {
+    const m = r.module || "Other";
     const t = r.topic || "Other";
-    if (!(t in infoMap)) {
-      infoMap[t] = { topic: t, count: 0, done: 0 };
-      order.push(t);
+    if (!byModule[m]) {
+      byModule[m] = {};
+      moduleOrder.push(m);
     }
-    infoMap[t].count += 1;
-    if (answeredIds.has(r.id)) infoMap[t].done += 1;
+    if (!byModule[m][t]) byModule[m][t] = { topic: t, count: 0, done: 0 };
+    byModule[m][t].count += 1;
+    if (answeredIds.has(r.id)) byModule[m][t].done += 1;
   });
-  const topics: TopicInfo[] = order.map((t) => infoMap[t]);
+  moduleOrder.sort();
+  moduleOrder.forEach((m) => {
+    const topics = Object.values(byModule[m]);
+    groups.push({
+      module: m,
+      title: MODULE_TITLES[m] || m,
+      topics,
+      count: topics.reduce((s, t) => s + t.count, 0),
+      done: topics.reduce((s, t) => s + t.done, 0),
+    });
+  });
 
   function toggleTopic(topic: string) {
     setSelectedTopics((s) => (s.includes(topic) ? s.filter((t) => t !== topic) : [...s, topic]));
   }
-  function toggleModule(m: string) {
-    setSelectedModules((s) => (s.includes(m) ? s.filter((x) => x !== m) : [...s, m]));
+  function toggleModuleOpen(m: string) {
+    setOpenModules((s) => (s.includes(m) ? s.filter((x) => x !== m) : [...s, m]));
   }
-  function selectAll() {
-    setSelectedTopics(topics.map((t) => t.topic));
+  function toggleModuleAll(g: ModuleGroup) {
+    const names = g.topics.map((t) => t.topic);
+    const allOn = names.every((n) => selectedTopics.includes(n));
+    setSelectedTopics((s) =>
+      allOn ? s.filter((t) => !names.includes(t)) : [...new Set([...s, ...names])]
+    );
   }
-  function clearAll() {
+  function toggleIn(list: string[], setList: (v: string[]) => void, value: string) {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  }
+  function selectAllTopics() {
+    setSelectedTopics(rows.map((r) => r.topic || "Other"));
+  }
+  function clearAllTopics() {
     setSelectedTopics([]);
   }
 
-  const totalVisible = topics.reduce((s, t) => s + t.count, 0);
+  const selectedCount = rows.filter((r) => selectedTopics.includes(r.topic || "Other")).length;
 
   function launchSession() {
     const params = new URLSearchParams();
-    const activeTopics = selectedTopics.filter((t) => topics.some((x) => x.topic === t));
-    if (activeTopics.length > 0) params.set("topics", activeTopics.join("~~"));
-    if (selectedModules.length > 0) params.set("modules", selectedModules.join("~~"));
-    if (popDifficulty !== "All") params.set("difficulty", popDifficulty);
-    if (popYield !== "All") params.set("yield", popYield);
-    if (amount !== "All") params.set("limit", amount);
-    if (status !== "all") params.set("status", status);
+    if (selectedTopics.length > 0) params.set("topics", selectedTopics.join("~~"));
+    if (difficulties.length > 0) params.set("difficulties", difficulties.join("~~"));
+    if (yields.length > 0) params.set("yields", yields.join("~~"));
+    if (statuses.length > 0) params.set("statuses", statuses.join("~~"));
+    params.set("limit", String(amount));
     router.push("/question?" + params.toString());
   }
 
@@ -171,94 +174,91 @@ export default function StudyPage() {
       )}
 
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Choose what to study</h1>
-      <p className="mt-2 text-zinc-500">Filter by module and difficulty, pick your topics, or study everything.</p>
-
-      <div className="mt-6 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Module</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {modules.map((m) => {
-            const isOn = selectedModules.includes(m);
-            return (
-              <button
-                key={m}
-                onClick={() => toggleModule(m)}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
-                  isOn ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"
-                }`}
-              >
-                {m}
-              </button>
-            );
-          })}
-          {selectedModules.length > 0 && (
-            <button onClick={() => setSelectedModules([])} className="rounded-full px-4 py-2 text-sm font-semibold text-zinc-400 hover:text-zinc-600">
-              Clear modules
-            </button>
-          )}
-        </div>
-
-        <p className="mt-5 text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {DIFFICULTIES.map((d) => (
-            <button
-              key={d}
-              onClick={() => setDifficulty(d)}
-              className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${
-                difficulty === d ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
+      <p className="mt-2 text-zinc-500">All topics are selected by default. Open a module to pick specific topics.</p>
 
       <div className="mt-6 flex gap-3 text-sm font-semibold">
-        <button onClick={selectAll} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">
+        <button onClick={selectAllTopics} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">
           Select all
         </button>
-        <button onClick={clearAll} className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-zinc-600 transition-colors hover:bg-zinc-50">
+        <button onClick={clearAllTopics} className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-zinc-600 transition-colors hover:bg-zinc-50">
           Clear
         </button>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        {topics.map((t) => {
-          const isOn = selectedTopics.includes(t.topic);
-          const pct = t.count > 0 ? Math.round((t.done / t.count) * 100) : 0;
+      <div className="mt-6 flex flex-col gap-4">
+        {groups.map((g) => {
+          const isOpen = openModules.includes(g.module);
+          const names = g.topics.map((t) => t.topic);
+          const allOn = names.every((n) => selectedTopics.includes(n));
+          const someOn = names.some((n) => selectedTopics.includes(n));
+          const pct = g.count > 0 ? Math.round((g.done / g.count) * 100) : 0;
           return (
-            <button
-              key={t.topic}
-              onClick={() => toggleTopic(t.topic)}
-              className={`flex flex-col gap-3 rounded-2xl border-2 px-5 py-4 text-left transition-all ${
-                isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-3">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-md border-2 text-sm font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>
-                    ✓
-                  </span>
-                  <span className="font-semibold text-zinc-800">{t.topic}</span>
-                </span>
-                <span className="text-sm font-medium text-zinc-400">{t.done}/{t.count}</span>
+            <div key={g.module} className={`rounded-3xl border-2 bg-white shadow-sm transition-all ${someOn ? "border-emerald-200" : "border-zinc-200"}`}>
+              <div className="flex items-center gap-4 px-5 py-4">
+                <button
+                  onClick={() => toggleModuleAll(g)}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold ${
+                    allOn ? "border-emerald-600 bg-emerald-600 text-white" : someOn ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-zinc-300 text-transparent"
+                  }`}
+                >
+                  ✓
+                </button>
+                <button onClick={() => toggleModuleOpen(g.module)} className="flex flex-1 items-center justify-between gap-4 text-left">
+                  <span className="font-bold text-zinc-800">{g.title}</span>
+                  <span className="text-emerald-600">{isOpen ? "▴" : "▾"}</span>
+                </button>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
-                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+
+              <div className="px-5 pb-4">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                  <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1.5 text-xs font-semibold text-zinc-400">{g.done}/{g.count} completed</p>
               </div>
-            </button>
+
+              {isOpen && (
+                <div className="border-t border-zinc-100 px-5 py-4">
+                  <div className="flex flex-col gap-3">
+                    {g.topics.map((t) => {
+                      const isOn = selectedTopics.includes(t.topic);
+                      const tPct = t.count > 0 ? Math.round((t.done / t.count) * 100) : 0;
+                      return (
+                        <button
+                          key={t.topic}
+                          onClick={() => toggleTopic(t.topic)}
+                          className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+                            isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>
+                              ✓
+                            </span>
+                            <span className="font-semibold text-zinc-800">{t.topic}</span>
+                          </div>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${tPct}%` }} />
+                          </div>
+                          <p className="mt-1 text-xs font-semibold text-zinc-400">{t.done}/{t.count} completed</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-emerald-100 bg-white/90 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <p className="font-semibold text-zinc-600">
-            {selectedTopics.length === 0
-              ? `All shown topics · ${totalVisible} questions`
-              : `${selectedTopics.length} topic${selectedTopics.length === 1 ? "" : "s"} selected`}
-          </p>
-          <button onClick={() => setShowPopup(true)} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
+          <p className="font-semibold text-zinc-600">{selectedCount} questions selected</p>
+          <button
+            onClick={() => setShowPopup(true)}
+            disabled={selectedCount === 0}
+            className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
+          >
             Start Session →
           </button>
         </div>
@@ -266,7 +266,7 @@ export default function StudyPage() {
 
       {showPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-extrabold text-zinc-900">Session options</h2>
               <button onClick={() => setShowPopup(false)} className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:text-zinc-600">
@@ -274,23 +274,39 @@ export default function StudyPage() {
               </button>
             </div>
 
-            <div className="mt-6 flex flex-col gap-5">
+            <div className="mt-6 flex flex-col gap-6">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {AMOUNTS.map((a) => (
-                    <button key={a} onClick={() => setAmount(a)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === a ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                      {a}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(selectedCount, 1)}
+                    value={amount}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), Math.max(selectedCount, 1)));
+                    }}
+                    className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400"
+                  />
                 </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={Math.max(selectedCount, 1)}
+                  value={amount}
+                  onChange={(e) => setAmount(parseInt(e.target.value, 10))}
+                  className="mt-3 w-full accent-emerald-600"
+                />
+                <p className="mt-1 text-xs text-zinc-400">Up to {selectedCount} available</p>
               </div>
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
+                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {DIFFICULTIES.map((d) => (
-                    <button key={d} onClick={() => setPopDifficulty(d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${popDifficulty === d ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                    <button key={d} onClick={() => toggleIn(difficulties, setDifficulties, d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.includes(d) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
                       {d}
                     </button>
                   ))}
@@ -298,10 +314,11 @@ export default function StudyPage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield (how likely to come up)</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield</p>
+                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {YIELDS.map((y) => (
-                    <button key={y} onClick={() => setPopYield(y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${popYield === y ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                    <button key={y} onClick={() => toggleIn(yields, setYields, y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.includes(y) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
                       {y}
                     </button>
                   ))}
@@ -310,9 +327,10 @@ export default function StudyPage() {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Question status</p>
+                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {STATUSES.map((s) => (
-                    <button key={s.value} onClick={() => setStatus(s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${status === s.value ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                    <button key={s.value} onClick={() => toggleIn(statuses, setStatuses, s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${statuses.includes(s.value) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
                       {s.label}
                     </button>
                   ))}

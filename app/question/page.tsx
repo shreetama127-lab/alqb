@@ -8,6 +8,8 @@ type Option = { letter: string; text: string; correct: boolean; explanation: str
 type Resource = { title: string; url: string };
 type Question = {
   id: number;
+  question_ref?: string | null;
+  exam_board?: string | null;
   stem: string;
   topic?: string;
   options: Option[];
@@ -36,7 +38,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-const LETTERS = ["A", "B", "C", "D", "E", "F"];
+const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 function prepareQuestions(data: Question[]): Question[] {
   return shuffle(data).map((q) => ({
@@ -46,6 +48,11 @@ function prepareQuestions(data: Question[]): Question[] {
       letter: LETTERS[i] || opt.letter,
     })),
   }));
+}
+
+function refCode(q: Question) {
+  const board = q.exam_board || "OCR";
+  return q.question_ref ? `${board}-${q.question_ref}` : `${board}-${q.id}`;
 }
 
 function ExplanationText({ text }: { text: string }) {
@@ -76,6 +83,7 @@ export default function QuestionPage() {
   const [stats, setStats] = useState<Record<number, { total: number; correct: number }>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [noteSaved, setNoteSaved] = useState(false);
+  const [showScore, setShowScore] = useState(true);
   const [showNotesReview, setShowNotesReview] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finalTime, setFinalTime] = useState(0);
@@ -84,20 +92,24 @@ export default function QuestionPage() {
   useEffect(() => {
     async function loadQuestions() {
       const params = new URLSearchParams(window.location.search);
-      const topicsParam = params.get("topics");
-      const chosenTopics = topicsParam ? topicsParam.split("~~") : [];
-      const modulesParam = params.get("modules");
-      const chosenModules = modulesParam ? modulesParam.split("~~") : [];
-      const difficulty = params.get("difficulty");
-      const yieldParam = params.get("yield");
-      const status = params.get("status");
+      const split = (key: string) => {
+        const v = params.get(key);
+        return v ? v.split("~~").filter(Boolean) : [];
+      };
+      const chosenTopics = split("topics");
+      const chosenModules = split("modules");
+      const chosenDiffs = split("difficulties");
+      const chosenYields = split("yields");
+      const chosenStatuses = split("statuses");
       const limitParam = params.get("limit");
 
-      let query = supabase.from("questions").select("id, stem, topic, options, resources");
+      let query = supabase
+        .from("questions")
+        .select("id, question_ref, exam_board, stem, topic, options, resources");
       if (chosenTopics.length > 0) query = query.in("topic", chosenTopics);
       if (chosenModules.length > 0) query = query.in("module", chosenModules);
-      if (difficulty && difficulty !== "All") query = query.eq("difficulty", difficulty);
-      if (yieldParam && yieldParam !== "All") query = query.eq("yield", yieldParam);
+      if (chosenDiffs.length > 0) query = query.in("difficulty", chosenDiffs);
+      if (chosenYields.length > 0) query = query.in("yield", chosenYields);
 
       const { data, error } = await query;
       if (error) {
@@ -108,7 +120,7 @@ export default function QuestionPage() {
 
       let list = (data || []) as Question[];
 
-      if (status && status !== "all") {
+      if (chosenStatuses.length > 0) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData.user) {
           const { data: ans } = await supabase
@@ -119,9 +131,13 @@ export default function QuestionPage() {
           (ans || []).forEach((a) => {
             latest[a.question_id] = a.is_correct;
           });
-          if (status === "unattempted") list = list.filter((q) => !(q.id in latest));
-          else if (status === "correct") list = list.filter((q) => latest[q.id] === true);
-          else if (status === "incorrect") list = list.filter((q) => latest[q.id] === false);
+          list = list.filter((q) => {
+            const seen = q.id in latest;
+            if (chosenStatuses.includes("unattempted") && !seen) return true;
+            if (chosenStatuses.includes("correct") && seen && latest[q.id]) return true;
+            if (chosenStatuses.includes("incorrect") && seen && !latest[q.id]) return true;
+            return false;
+          });
         }
       }
 
@@ -131,7 +147,6 @@ export default function QuestionPage() {
 
       setQuestions(list);
 
-      // preload any existing notes for these questions
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user && list.length > 0) {
         const ids = list.map((q) => q.id);
@@ -407,10 +422,11 @@ export default function QuestionPage() {
   }
 
   function reportQuestion() {
-    const subject = encodeURIComponent("ALQB question report — Question #" + q.id);
+    const code = refCode(q);
+    const subject = encodeURIComponent("ALQB question report — " + code);
     const body = encodeURIComponent(
-      "I'd like to report a problem with this question.\n\nQuestion ID: " +
-        q.id +
+      "I'd like to report a problem with this question.\n\nQuestion code: " +
+        code +
         "\nTopic: " +
         (q.topic || "") +
         "\n\nWhat's wrong:\n"
@@ -497,7 +513,7 @@ export default function QuestionPage() {
 
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Question {index + 1} of {questions.length}</p>
-          {answeredCount > 0 && (
+          {showScore && answeredCount > 0 && (
             <p className="rounded-full bg-emerald-100 px-4 py-1 text-sm font-bold text-emerald-800">{correctCount}/{answeredCount} correct · {accuracy}%</p>
           )}
         </div>
@@ -507,11 +523,23 @@ export default function QuestionPage() {
         </div>
 
         <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-8 shadow-sm">
-          {q.topic && (
-            <span className="mb-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
-              {q.topic}
-            </span>
-          )}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            {q.topic ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+                {q.topic}
+              </span>
+            ) : (
+              <span />
+            )}
+            <button
+              onClick={flagQuestion}
+              disabled={isFlagged}
+              title="Flag this question for review"
+              className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}
+            >
+              {isFlagged ? "⚑ Flagged" : "⚑ Flag"}
+            </button>
+          </div>
           <h2 className="text-2xl font-bold leading-snug text-zinc-900">{q.stem}</h2>
 
           <div className="mt-6 flex flex-col gap-3">
@@ -626,9 +654,17 @@ export default function QuestionPage() {
 
       <aside className="lg:w-60">
         <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm lg:sticky lg:top-20">
-          <button onClick={flagQuestion} disabled={isFlagged} className={`mb-4 w-full rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-500 hover:border-red-300 hover:text-red-500"}`}>
-            {isFlagged ? "⚑ Flagged" : "⚑ Flag this question"}
+          <button
+            onClick={() => setShowScore((s) => !s)}
+            className="mb-4 w-full rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
+          >
+            {showScore ? "🙈 Hide score" : "👁 Show score"}
           </button>
+          {showScore && answeredCount > 0 && (
+            <p className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-center text-sm font-bold text-emerald-800">
+              {correctCount}/{answeredCount} · {accuracy}%
+            </p>
+          )}
           <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
           <div className="mt-4 flex max-h-[55vh] flex-col gap-1.5 overflow-y-auto pr-1">
             {questions.map((qq, i) => {
