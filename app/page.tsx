@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 
 export default function Home() {
@@ -8,11 +9,12 @@ export default function Home() {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [confirmAge, setConfirmAge] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Already logged in? Skip the marketing page — go straight to the dashboard.
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) window.location.href = "/dashboard";
@@ -33,7 +35,7 @@ export default function Home() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { first_name: firstName } },
+        options: { data: { first_name: firstName, agreed_terms_at: new Date().toISOString(), confirmed_age_16: true } },
       });
 
       if (error) {
@@ -77,6 +79,9 @@ export default function Home() {
     }
   }
 
+  const canSubmit =
+    email && password && (mode === "login" || (agreeTerms && confirmAge));
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
@@ -112,7 +117,25 @@ export default function Home() {
               <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
             </div>
 
-            <button type="submit" disabled={loading || !email || !password} className="mt-5 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
+            {mode === "signup" && (
+              <div className="mt-5 flex flex-col gap-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={confirmAge} onChange={(e) => setConfirmAge(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />
+                  <span className="text-sm text-zinc-600">I confirm I am 16 or over.</span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />
+                  <span className="text-sm text-zinc-600">
+                    I agree to the{" "}
+                    <Link href="/terms" target="_blank" className="font-bold text-emerald-700 hover:underline">Terms of Use</Link>
+                    {" "}and{" "}
+                    <Link href="/privacy" target="_blank" className="font-bold text-emerald-700 hover:underline">Privacy Policy</Link>.
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <button type="submit" disabled={loading || !canSubmit} className="mt-5 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
               {loading ? "Please wait…" : mode === "signup" ? "Create Account" : "Log In →"}
             </button>
           </form>
@@ -141,6 +164,11 @@ export default function Home() {
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Track progress</h3>
           <p className="mt-2 text-sm text-zinc-500">See your accuracy grow.</p>
         </div>
+      </div>
+
+      <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-400">
+        <Link href="/terms" className="hover:text-emerald-700">Terms of Use</Link>
+        <Link href="/privacy" className="hover:text-emerald-700">Privacy Policy</Link>
       </div>
     </main>
   );
