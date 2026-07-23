@@ -12,12 +12,14 @@ type Question = {
   exam_board?: string | null;
   stem: string;
   topic?: string;
+  key_takeaway?: string | null;
   options: Option[];
   resources?: Resource[] | null;
 };
 type AnswerRecord = Record<number, { selected: string; correct: boolean }>;
 
 const REPORT_EMAIL = "info.alqb@gmail.com";
+const TAKEAWAY_HEADINGS = ["key takeaway", "common mistake", "common mistakes", "exam tip", "exam tips"];
 
 function fmt(total: number) {
   const m = Math.floor(Math.abs(total) / 60);
@@ -66,6 +68,23 @@ function ExplanationText({ text }: { text: string }) {
   );
 }
 
+function TakeawayText({ text }: { text: string }) {
+  const lines = (text || "").split("\n").map((l) => l.trim());
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      {lines.map((line, i) => {
+        if (!line) return null;
+        const isHeading = TAKEAWAY_HEADINGS.includes(line.toLowerCase().replace(/[:.]$/, ""));
+        return isHeading ? (
+          <p key={i} className="mt-2 text-xs font-bold uppercase tracking-wide text-indigo-700">{line}</p>
+        ) : (
+          <p key={i} className="text-sm leading-relaxed text-zinc-700">{line}</p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function QuestionPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +124,7 @@ export default function QuestionPage() {
 
       let query = supabase
         .from("questions")
-        .select("id, question_ref, exam_board, stem, topic, options, resources");
+        .select("id, question_ref, exam_board, stem, topic, key_takeaway, options, resources");
       if (chosenTopics.length > 0) query = query.in("topic", chosenTopics);
       if (chosenModules.length > 0) query = query.in("module", chosenModules);
       if (chosenDiffs.length > 0) query = query.in("difficulty", chosenDiffs);
@@ -207,6 +226,7 @@ export default function QuestionPage() {
   const thisStats = stats[q.id];
   const thisNote = notes[q.id] || "";
   const showResources = submitted && q.resources && q.resources.length > 0;
+  const showTakeaway = submitted && q.key_takeaway && q.key_takeaway.trim().length > 0;
 
   const answeredCount = Object.keys(answers).length;
   const correctCount = Object.values(answers).filter((a) => a.correct).length;
@@ -584,6 +604,13 @@ export default function QuestionPage() {
               </button>
             )}
           </div>
+
+          {showTakeaway && (
+            <div className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+              <p className="font-bold text-indigo-800">💡 Key takeaway</p>
+              <TakeawayText text={q.key_takeaway || ""} />
+            </div>
+          )}
 
           {submitted && thisStats && (
             <p className="mt-5 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-600">
