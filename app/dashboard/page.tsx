@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { PLANS, FREE_PLAN_IDS } from "@/app/subscriptions/page";
+import { PLANS, FREE_PLAN_IDS } from "@/app/lib/plans";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [examDate, setExamDate] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState("");
   const [savingDate, setSavingDate] = useState(false);
+  const [showExamModal, setShowExamModal] = useState(false);
 
   useEffect(() => {
     async function loadStats() {
@@ -75,7 +76,10 @@ export default function DashboardPage() {
         .select("exam_date")
         .eq("user_id", userData.user.id)
         .maybeSingle();
-      if (exam?.exam_date) setExamDate(exam.exam_date);
+      if (exam?.exam_date) {
+        setExamDate(exam.exam_date);
+        setDateInput(exam.exam_date);
+      }
 
       setLoading(false);
     }
@@ -89,7 +93,10 @@ export default function DashboardPage() {
       .from("exam_dates")
       .upsert({ user_id: userId, exam_date: dateInput, updated_at: new Date().toISOString() });
     if (error) console.error("Error saving exam date:", error);
-    else setExamDate(dateInput);
+    else {
+      setExamDate(dateInput);
+      setShowExamModal(false);
+    }
     setSavingDate(false);
   }
 
@@ -100,6 +107,7 @@ export default function DashboardPage() {
     else {
       setExamDate(null);
       setDateInput("");
+      setShowExamModal(false);
     }
   }
 
@@ -107,8 +115,7 @@ export default function DashboardPage() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const exam = new Date(dateStr + "T00:00:00");
-    const diff = Math.round((exam.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
+    return Math.round((exam.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
 
   if (loading)
@@ -129,44 +136,79 @@ export default function DashboardPage() {
     );const days = examDate ? daysUntil(examDate) : null;
   const prettyDate = examDate
     ? new Date(examDate + "T00:00:00").toLocaleDateString(undefined, {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
       })
     : "";
-
   const myPlans = PLANS.filter((p) => activeIds.includes(p.id));
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {showExamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold text-zinc-900">Exam date</h2>
+              <button onClick={() => setShowExamModal(false)} className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:text-zinc-600">×</button>
+            </div>
+            {examDate && <p className="mt-2 text-sm font-semibold text-zinc-500">Currently set to {prettyDate}</p>}
+            <input
+              type="date"
+              value={dateInput}
+              onChange={(e) => setDateInput(e.target.value)}
+              className="mt-5 w-full rounded-xl border border-zinc-200 px-4 py-3 text-zinc-700 outline-none focus:border-emerald-400"
+            />
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              {examDate && (
+                <button onClick={clearExamDate} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-2.5 font-bold text-zinc-600 transition-all hover:border-red-300 hover:text-red-500">
+                  Clear
+                </button>
+              )}
+              <button onClick={saveExamDate} disabled={!dateInput || savingDate} className="rounded-full bg-emerald-700 px-8 py-2.5 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:bg-zinc-300 disabled:shadow-none">
+                {savingDate ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">
             Welcome back, <span className="text-emerald-700">{firstName}</span>
           </h1>
           <p className="mt-2 text-lg text-zinc-500">What would you like to study today?</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/notes"
-            className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-5 py-3 font-bold text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400"
-          >
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/notes" className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 font-bold text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
             <span className="text-2xl">📝</span>
-            <span>
+            <span className="text-sm">
               Review notes
-              {noteCount > 0 && <span className="ml-1 text-sm font-semibold text-zinc-400">({noteCount})</span>}
+              {noteCount > 0 && <span className="ml-1 font-semibold text-zinc-400">({noteCount})</span>}
             </span>
           </Link>
+
+          <button onClick={() => setShowExamModal(true)} className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
+            <span className="text-2xl">📆</span>
+            {days !== null ? (
+              <span>
+                <span className="block text-lg font-extrabold leading-tight text-emerald-700">
+                  {days > 0 ? `${days} day${days === 1 ? "" : "s"}` : days === 0 ? "Today!" : "Passed"}
+                </span>
+                <span className="block text-xs font-semibold text-zinc-400">until your exam</span>
+              </span>
+            ) : (
+              <span className="text-sm font-bold text-emerald-700">Set exam date</span>
+            )}
+          </button>
+
           {streak > 0 && (
-            <div className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3">
-              <span className="text-3xl">🔥</span>
-              <div>
-                <p className="text-2xl font-extrabold text-orange-600">{streak}</p>
-                <p className="text-xs font-semibold text-orange-600/70">
-                  day{streak === 1 ? "" : "s"} in a row
-                </p>
-              </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+              <span className="text-2xl">🔥</span>
+              <span>
+                <span className="block text-lg font-extrabold leading-tight text-orange-600">{streak}</span>
+                <span className="block text-xs font-semibold text-orange-600/70">day{streak === 1 ? "" : "s"} in a row</span>
+              </span>
             </div>
           )}
         </div>
@@ -174,15 +216,9 @@ export default function DashboardPage() {
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
         {myPlans.map((plan) => (
-          <Link
-            key={plan.id}
-            href="/study"
-            className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg"
-          >
+          <Link key={plan.id} href="/study" className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg">
             <p className="text-4xl">{plan.emoji}</p>
-            <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">
-              {plan.title}
-            </h3>
+            <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">{plan.title}</h3>
             <p className="mt-1 text-sm font-semibold text-zinc-500">
               {questionCount ? `${questionCount} questions` : "Question bank"}
             </p>
@@ -190,71 +226,11 @@ export default function DashboardPage() {
           </Link>
         ))}
 
-        <Link
-          href="/subscriptions"
-          className="group flex flex-col justify-center rounded-3xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-7 text-center transition-all hover:-translate-y-1 hover:border-emerald-400"
-        >
+        <Link href="/subscriptions" className="group flex flex-col justify-center rounded-3xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-7 text-center transition-all hover:-translate-y-1 hover:border-emerald-400">
           <p className="text-4xl">➕</p>
           <h3 className="mt-4 text-xl font-extrabold text-emerald-700">Add a question bank</h3>
           <p className="mt-1 text-sm font-semibold text-zinc-500">Browse all subscriptions</p>
         </Link>
-      </div>
-
-      <div className="mt-8 rounded-3xl border border-emerald-100 bg-white p-7 shadow-sm">
-        {examDate && days !== null ? (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-4xl">📆</span>
-              <div>
-                {days > 0 ? (
-                  <p className="text-2xl font-extrabold text-zinc-900">
-                    <span className="text-emerald-700">{days}</span> day{days === 1 ? "" : "s"} until your exam
-                  </p>
-                ) : days === 0 ? (
-                  <p className="text-2xl font-extrabold text-emerald-700">Your exam is today — good luck! 🍀</p>
-                ) : (
-                  <p className="text-2xl font-extrabold text-zinc-900">Exam date has passed</p>
-                )}
-                <p className="mt-1 text-sm font-semibold text-zinc-500">{prettyDate}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dateInput}
-                onChange={(e) => setDateInput(e.target.value)}
-                className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-emerald-400"
-              />
-              <button onClick={saveExamDate} disabled={!dateInput || savingDate} className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
-                Update
-              </button>
-              <button onClick={clearExamDate} className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">
-                Clear
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-4xl">📆</span>
-              <div>
-                <p className="text-lg font-bold text-zinc-900">Set your exam date</p>
-                <p className="mt-1 text-sm text-zinc-500">See a countdown to keep you on track.</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dateInput}
-                onChange={(e) => setDateInput(e.target.value)}
-                className="rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-emerald-400"
-              />
-              <button onClick={saveExamDate} disabled={!dateInput || savingDate} className="rounded-full bg-emerald-700 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
-                {savingDate ? "Saving…" : "Set date"}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </main>
   );
