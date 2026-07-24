@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
+import Comments from "@/app/Comments";
 
 type Option = { letter: string; text: string; correct: boolean; explanation: string };
 type Resource = { title: string; url: string };
@@ -663,20 +664,7 @@ export default function QuestionPage() {
           )}
         </div>
 
-        <div className="mt-6 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-zinc-900">💬 Discussion</h3>
-            <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-500">
-              Coming soon
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-zinc-500">
-            Soon you&apos;ll be able to discuss this question with other students — ask for help, share tips, and explain tricky concepts.
-          </p>
-          <div className="mt-4 cursor-not-allowed rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-400">
-            Write a comment… (coming soon)
-          </div>
-        </div>
+        <Comments questionId={q.id} canPost={submitted} />
       </div>
 
       <aside className="lg:w-60">
