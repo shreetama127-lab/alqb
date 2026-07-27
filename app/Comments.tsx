@@ -6,27 +6,11 @@ import { supabase } from "@/app/lib/supabase";
 const OWNER_EMAILS = ["shreetama127@gmail.com"];
 const REPORT_EMAIL = "info.alqb@gmail.com";
 
-const ADJECTIVES = [
-  "Covalent", "Ionic", "Mitotic", "Meiotic", "Enzymatic", "Aerobic", "Anaerobic",
-  "Hydrophilic", "Hydrophobic", "Catalytic", "Osmotic", "Polar", "Saturated",
-  "Alkaline", "Buffered", "Helical", "Ribosomal", "Cytoplasmic", "Allosteric",
-  "Exothermic", "Endothermic", "Photosynthetic", "Diploid", "Haploid", "Turgid",
-];
-const NOUNS = [
-  "Otter", "Newt", "Axolotl", "Badger", "Ferret", "Heron", "Ibex", "Kestrel",
-  "Lemur", "Marmot", "Narwhal", "Ocelot", "Puffin", "Quokka", "Raven", "Stoat",
-  "Tapir", "Urchin", "Vole", "Walrus", "Yak", "Mitochondrion", "Ribosome",
-  "Chloroplast", "Flagellum", "Enzyme", "Beaker", "Pipette",
-];
+const ADJECTIVES = ["Covalent","Ionic","Mitotic","Meiotic","Enzymatic","Aerobic","Anaerobic","Hydrophilic","Hydrophobic","Catalytic","Osmotic","Polar","Saturated","Alkaline","Buffered","Helical","Ribosomal","Cytoplasmic","Allosteric","Exothermic","Endothermic","Photosynthetic","Diploid","Haploid","Turgid"];
+const NOUNS = ["Otter","Newt","Axolotl","Badger","Ferret","Heron","Ibex","Kestrel","Lemur","Marmot","Narwhal","Ocelot","Puffin","Quokka","Raven","Stoat","Tapir","Urchin","Vole","Walrus","Yak","Mitochondrion","Ribosome","Chloroplast","Flagellum","Enzyme","Beaker","Pipette"];
 
-type Row = {
-  id: number;
-  user_id: string;
-  parent_id: number | null;
-  content: string;
-  deleted: boolean;
-  created_at: string;
-};
+type Row = { id: number; user_id: string; parent_id: number | null; content: string; deleted: boolean; created_at: string; };
+type VoteInfo = { score: number; mine: number };
 
 function timeAgo(iso: string) {
   const secs = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -49,6 +33,7 @@ function randomHandle() {
 export default function Comments({ questionId, canPost }: { questionId: number; canPost: boolean }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [handles, setHandles] = useState<Record<string, string>>({});
+  const [votes, setVotes] = useState<Record<number, VoteInfo>>({});
   const [userId, setUserId] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,15 +42,14 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
   const [replyText, setReplyText] = useState("");
   const [posting, setPosting] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, [questionId]);
+  useEffect(() => { load(); }, [questionId]);
 
   async function load() {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
+    const uid = userData.user?.id || null;
     if (userData.user) {
-      setUserId(userData.user.id);
+      setUserId(uid);
       setIsOwner(OWNER_EMAILS.includes(userData.user.email || ""));
     }
 
@@ -74,38 +58,38 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
       .select("id, user_id, parent_id, content, deleted, created_at")
       .eq("question_id", questionId)
       .order("created_at", { ascending: true });
-
     const list = (data || []) as Row[];
     setRows(list);
 
     const ids = Array.from(new Set(list.map((r) => r.user_id)));
     if (ids.length > 0) {
-      const { data: hs } = await supabase
-        .from("user_handles")
-        .select("user_id, handle")
-        .in("user_id", ids);
+      const { data: hs } = await supabase.from("user_handles").select("user_id, handle").in("user_id", ids);
       const map: Record<string, string> = {};
-      (hs || []).forEach((h) => {
-        map[h.user_id] = h.handle;
-      });
+      (hs || []).forEach((h) => { map[h.user_id] = h.handle; });
       setHandles(map);
+    }
+
+    const commentIds = list.map((r) => r.id);
+    if (commentIds.length > 0) {
+      const { data: voteRows } = await supabase.from("comment_votes").select("comment_id, user_id, vote").in("comment_id", commentIds);
+      const vmap: Record<number, VoteInfo> = {};
+      commentIds.forEach((id) => { vmap[id] = { score: 0, mine: 0 }; });
+      (voteRows || []).forEach((v) => {
+        if (!vmap[v.comment_id]) vmap[v.comment_id] = { score: 0, mine: 0 };
+        vmap[v.comment_id].score += v.vote;
+        if (v.user_id === uid) vmap[v.comment_id].mine = v.vote;
+      });
+      setVotes(vmap);
     }
     setLoading(false);
   }
 
   async function ensureHandle(uid: string): Promise<string> {
-    const { data: existing } = await supabase
-      .from("user_handles")
-      .select("handle")
-      .eq("user_id", uid)
-      .maybeSingle();
+    const { data: existing } = await supabase.from("user_handles").select("handle").eq("user_id", uid).maybeSingle();
     if (existing?.handle) return existing.handle;
-
     for (let i = 0; i < 6; i++) {
       const candidate = randomHandle();
-      const { error } = await supabase
-        .from("user_handles")
-        .insert({ user_id: uid, handle: candidate });
+      const { error } = await supabase.from("user_handles").insert({ user_id: uid, handle: candidate });
       if (!error) return candidate;
     }
     return "Anonymous";
@@ -116,17 +100,20 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
     if (!body || !userId) return;
     setPosting(true);
     await ensureHandle(userId);
-    const { error } = await supabase.from("comments").insert({
-      question_id: questionId,
-      user_id: userId,
-      parent_id: parentId,
-      content: body,
-    });
+    const { error } = await supabase.from("comments").insert({ question_id: questionId, user_id: userId, parent_id: parentId, content: body });
     if (error) console.error("Error posting comment:", error);
-    setText("");
-    setReplyText("");
-    setReplyTo(null);
-    setPosting(false);
+    setText(""); setReplyText(""); setReplyTo(null); setPosting(false);
+    await load();
+  }
+
+  async function vote(commentId: number, value: number) {
+    if (!userId) return;
+    const current = votes[commentId]?.mine || 0;
+    if (current === value) {
+      await supabase.from("comment_votes").delete().eq("comment_id", commentId).eq("user_id", userId);
+    } else {
+      await supabase.from("comment_votes").upsert({ comment_id: commentId, user_id: userId, vote: value });
+    }
     await load();
   }
 
@@ -139,20 +126,15 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
 
   function reportComment(c: Row) {
     const subject = encodeURIComponent("ALQB comment report — comment #" + c.id);
-    const body = encodeURIComponent(
-      "I'd like to report a comment.\n\nComment ID: " + c.id +
-      "\nQuestion ID: " + questionId +
-      "\n\nWhy:\n"
-    );
+    const body = encodeURIComponent("I'd like to report a comment.\n\nComment ID: " + c.id + "\nQuestion ID: " + questionId + "\n\nWhy:\n");
     window.location.href = "mailto:" + REPORT_EMAIL + "?subject=" + subject + "&body=" + body;
   }
 
   const topLevel = rows.filter((r) => r.parent_id === null);
   const repliesOf = (id: number) => rows.filter((r) => r.parent_id === id);
-  const visibleCount = rows.filter((r) => !r.deleted).length;
-
-  function Bubble({ c, isReply }: { c: Row; isReply: boolean }) {
+  const visibleCount = rows.filter((r) => !r.deleted).length;function Bubble({ c, isReply }: { c: Row; isReply: boolean }) {
     const mine = c.user_id === userId;
+    const v = votes[c.id] || { score: 0, mine: 0 };
     return (
       <div className={`rounded-2xl border p-4 ${isReply ? "border-zinc-100 bg-zinc-50/60" : "border-emerald-100 bg-white"}`}>
         {c.deleted ? (
@@ -166,20 +148,19 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{c.content}</p>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold">
+              <div className="flex items-center gap-1">
+                <button onClick={() => vote(c.id, 1)} className={`rounded-full border px-2 py-1 transition-colors ${v.mine === 1 ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-400 hover:border-emerald-300"}`}>👍</button>
+                <span className={`min-w-[1.5rem] text-center ${v.score > 0 ? "text-emerald-700" : v.score < 0 ? "text-red-500" : "text-zinc-400"}`}>{v.score}</span>
+                <button onClick={() => vote(c.id, -1)} className={`rounded-full border px-2 py-1 transition-colors ${v.mine === -1 ? "border-red-300 bg-red-50 text-red-600" : "border-zinc-200 text-zinc-400 hover:border-red-300"}`}>👎</button>
+              </div>
               {!isReply && canPost && (
-                <button onClick={() => { setReplyTo(replyTo === c.id ? null : c.id); setReplyText(""); }} className="text-emerald-700 hover:underline">
-                  Reply
-                </button>
+                <button onClick={() => { setReplyTo(replyTo === c.id ? null : c.id); setReplyText(""); }} className="text-emerald-700 hover:underline">Reply</button>
               )}
               {(mine || isOwner) && (
-                <button onClick={() => removeComment(c.id)} className="text-zinc-400 hover:text-red-500">
-                  {isOwner && !mine ? "Remove (admin)" : "Delete"}
-                </button>
+                <button onClick={() => removeComment(c.id)} className="text-zinc-400 hover:text-red-500">{isOwner && !mine ? "Remove (admin)" : "Delete"}</button>
               )}
               {!mine && (
-                <button onClick={() => reportComment(c)} className="ml-auto text-zinc-400 hover:text-amber-600">
-                  ⚠ Report
-                </button>
+                <button onClick={() => reportComment(c)} className="ml-auto text-zinc-400 hover:text-amber-600">⚠ Report</button>
               )}
             </div>
           </>
@@ -192,32 +173,19 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
     <div className="mt-6 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-zinc-900">💬 Discussion</h3>
-        <span className="text-sm font-semibold text-zinc-400">
-          {visibleCount} comment{visibleCount === 1 ? "" : "s"}
-        </span>
+        <span className="text-sm font-semibold text-zinc-400">{visibleCount} comment{visibleCount === 1 ? "" : "s"}</span>
       </div>
 
       {!canPost && (
-        <p className="mt-3 rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-          Answer this question to join the discussion.
-        </p>
+        <p className="mt-3 rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">Answer this question to join the discussion.</p>
       )}
 
       {canPost && (
         <div className="mt-4">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Ask a question or share how you worked it out…"
-            className="h-24 w-full resize-none rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400"
-          />
+          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask a question or share how you worked it out…" className="h-24 w-full resize-none rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400" />
           <div className="mt-2 flex items-center justify-between">
             <p className="text-xs text-zinc-400">Posted under your anonymous name. Be kind and keep it about the biology.</p>
-            <button
-              onClick={() => post(text, null)}
-              disabled={posting || !text.trim()}
-              className="shrink-0 rounded-full bg-emerald-700 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300"
-            >
+            <button onClick={() => post(text, null)} disabled={posting || !text.trim()} className="shrink-0 rounded-full bg-emerald-700 px-6 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
               {posting ? "Posting…" : "Post"}
             </button>
           </div>
@@ -235,26 +203,15 @@ export default function Comments({ questionId, canPost }: { questionId: number; 
               <Bubble c={c} isReply={false} />
               {repliesOf(c.id).length > 0 && (
                 <div className="ml-6 mt-2 flex flex-col gap-2 border-l-2 border-emerald-100 pl-4">
-                  {repliesOf(c.id).map((r) => (
-                    <Bubble key={r.id} c={r} isReply={true} />
-                  ))}
+                  {repliesOf(c.id).map((r) => (<Bubble key={r.id} c={r} isReply={true} />))}
                 </div>
               )}
               {replyTo === c.id && (
                 <div className="ml-6 mt-2 border-l-2 border-emerald-100 pl-4">
-                  <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder={`Replying to ${handles[c.user_id] || "Anonymous"}…`}
-                    className="h-20 w-full resize-none rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400"
-                  />
+                  <textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder={`Replying to ${handles[c.user_id] || "Anonymous"}…`} className="h-20 w-full resize-none rounded-2xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400" />
                   <div className="mt-2 flex gap-2">
-                    <button onClick={() => post(replyText, c.id)} disabled={posting || !replyText.trim()} className="rounded-full bg-emerald-700 px-5 py-1.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
-                      Reply
-                    </button>
-                    <button onClick={() => setReplyTo(null)} className="rounded-full border border-zinc-200 px-5 py-1.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-50">
-                      Cancel
-                    </button>
+                    <button onClick={() => post(replyText, c.id)} disabled={posting || !replyText.trim()} className="rounded-full bg-emerald-700 px-5 py-1.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">Reply</button>
+                    <button onClick={() => setReplyTo(null)} className="rounded-full border border-zinc-200 px-5 py-1.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-50">Cancel</button>
                   </div>
                 </div>
               )}

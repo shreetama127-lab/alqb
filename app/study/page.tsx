@@ -18,6 +18,8 @@ const MODULE_TITLES: Record<string, string> = {
 
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 const YIELDS = ["High", "Medium", "Low"];
+const COUNT_PRESETS = [10, 20, 50, 100];
+const CHALLENGE_MINUTES = [5, 10, 15, 20];
 const STATUSES = [
   { value: "unattempted", label: "Unattempted" },
   { value: "correct", label: "Previously correct" },
@@ -37,6 +39,8 @@ export default function StudyPage() {
   const [difficulties, setDifficulties] = useState<string[]>([]);
   const [yields, setYields] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
+  const [challenge, setChallenge] = useState(false);
+  const [challengeMins, setChallengeMins] = useState(10);
 
   const [attemptedPct, setAttemptedPct] = useState(0);
   const [daysStudied, setDaysStudied] = useState(0);
@@ -48,7 +52,6 @@ export default function StudyPage() {
       const { data: qData } = await supabase.from("questions").select("id, topic, module");
       if (qData) {
         setRows(qData as QRow[]);
-        // every topic selected by default
         const allTopics = Array.from(new Set((qData as QRow[]).map((r) => r.topic || "Other")));
         setSelectedTopics(allTopics);
       }
@@ -65,9 +68,7 @@ export default function StudyPage() {
           const uniqueIds = new Set(ans.map((a) => a.question_id));
           setAnsweredIds(uniqueIds);
           setAttemptedPct(Math.round((uniqueIds.size / qData.length) * 100));
-          const days = new Set(
-            ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10))
-          );
+          const days = new Set(ans.map((a) => new Date(a.created_at).toISOString().slice(0, 10)));
           setDaysStudied(days.size);
           const correct = ans.filter((a) => a.is_correct).length;
           setAccuracy(Math.round((correct / ans.length) * 100));
@@ -78,7 +79,6 @@ export default function StudyPage() {
     load();
   }, []);
 
-  // build module → topics structure
   const groups: ModuleGroup[] = [];
   const moduleOrder: string[] = [];
   const byModule: Record<string, Record<string, TopicInfo>> = {};
@@ -114,9 +114,7 @@ export default function StudyPage() {
   function toggleModuleAll(g: ModuleGroup) {
     const names = g.topics.map((t) => t.topic);
     const allOn = names.every((n) => selectedTopics.includes(n));
-    setSelectedTopics((s) =>
-      allOn ? s.filter((t) => !names.includes(t)) : [...new Set([...s, ...names])]
-    );
+    setSelectedTopics((s) => (allOn ? s.filter((t) => !names.includes(t)) : [...new Set([...s, ...names])]));
   }
   function toggleIn(list: string[], setList: (v: string[]) => void, value: string) {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -129,6 +127,7 @@ export default function StudyPage() {
   }
 
   const selectedCount = rows.filter((r) => selectedTopics.includes(r.topic || "Other")).length;
+  const maxAmount = Math.max(selectedCount, 1);
 
   function launchSession() {
     const params = new URLSearchParams();
@@ -136,7 +135,11 @@ export default function StudyPage() {
     if (difficulties.length > 0) params.set("difficulties", difficulties.join("~~"));
     if (yields.length > 0) params.set("yields", yields.join("~~"));
     if (statuses.length > 0) params.set("statuses", statuses.join("~~"));
-    params.set("limit", String(amount));
+    if (challenge) {
+      params.set("challenge", String(challengeMins));
+    } else {
+      params.set("limit", String(Math.min(amount, maxAmount)));
+    }
     router.push("/question?" + params.toString());
   }
 
@@ -174,7 +177,7 @@ export default function StudyPage() {
       )}
 
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Choose what to study</h1>
-      <p className="mt-2 text-zinc-500">All topics are selected by default. Open a module to pick specific topics.</p>
+      <p className="mt-2 text-zinc-600">All topics are selected by default. Open a module to pick specific topics.</p>
 
       <div className="mt-6 flex gap-3 text-sm font-semibold">
         <button onClick={selectAllTopics} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">
@@ -269,42 +272,73 @@ export default function StudyPage() {
           <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-extrabold text-zinc-900">Session options</h2>
-              <button onClick={() => setShowPopup(false)} className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:text-zinc-600">
-                ×
-              </button>
+              <button onClick={() => setShowPopup(false)} className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:text-zinc-600">×</button>
             </div>
 
             <div className="mt-6 flex flex-col gap-6">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
-                  <input
-                    type="number"
-                    min={1}
-                    max={Math.max(selectedCount, 1)}
-                    value={amount}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), Math.max(selectedCount, 1)));
-                    }}
-                    className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400"
-                  />
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={Math.max(selectedCount, 1)}
-                  value={amount}
-                  onChange={(e) => setAmount(parseInt(e.target.value, 10))}
-                  className="mt-3 w-full accent-emerald-600"
-                />
-                <p className="mt-1 text-xs text-zinc-400">Up to {selectedCount} available</p>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                <label className="flex cursor-pointer items-center justify-between">
+                  <span>
+                    <span className="block font-bold text-zinc-900">⏱️ Timed challenge</span>
+                    <span className="block text-xs text-zinc-500">Answer as many as you can before time runs out.</span>
+                  </span>
+                  <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} className="h-6 w-6 accent-emerald-600" />
+                </label>
+                {challenge && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {CHALLENGE_MINUTES.map((m) => (
+                      <button key={m} onClick={() => setChallengeMins(m)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${challengeMins === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                        {m} min
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {!challenge && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
+                    <input
+                      type="number"
+                      min={1}
+                      max={maxAmount}
+                      value={amount}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), maxAmount));
+                      }}
+                      className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {COUNT_PRESETS.map((n) => (
+                      <button key={n} onClick={() => setAmount(Math.min(n, maxAmount))} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === Math.min(n, maxAmount) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                        {n}
+                      </button>
+                    ))}
+                    <button onClick={() => setAmount(maxAmount)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === maxAmount ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                      All
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={maxAmount}
+                    value={amount}
+                    onChange={(e) => setAmount(parseInt(e.target.value, 10))}
+                    className="mt-3 w-full accent-emerald-600"
+                  />
+                  <p className="mt-1 text-xs text-zinc-400">Up to {selectedCount} available</p>
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
-                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={() => setDifficulties([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                    All
+                  </button>
                   {DIFFICULTIES.map((d) => (
                     <button key={d} onClick={() => toggleIn(difficulties, setDifficulties, d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.includes(d) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
                       {d}
@@ -315,8 +349,10 @@ export default function StudyPage() {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield</p>
-                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={() => setYields([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+                    All
+                  </button>
                   {YIELDS.map((y) => (
                     <button key={y} onClick={() => toggleIn(yields, setYields, y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.includes(y) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
                       {y}
@@ -343,7 +379,7 @@ export default function StudyPage() {
                 Back
               </button>
               <button onClick={launchSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-                Start Session →
+                {challenge ? `Start ${challengeMins}-min challenge →` : "Start Session →"}
               </button>
             </div>
           </div>
