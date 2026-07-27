@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { PLANS, FREE_PLAN_IDS, Plan } from "@/app/lib/plans";
+import { PLANS, FREE_PLAN_IDS, PRICE_OPTIONS, Plan } from "@/app/lib/plans";
 
 export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
@@ -11,6 +11,7 @@ export default function SubscriptionsPage() {
   const [activeIds, setActiveIds] = useState<string[]>([]);
   const [qualification, setQualification] = useState<string | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
+  const [selectedTerm, setSelectedTerm] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function load() {
@@ -66,10 +67,14 @@ export default function SubscriptionsPage() {
   function reset() {
     setQualification(null);
     setSubject(null);
+  }
+
+  function termFor(planId: string) {
+    return selectedTerm[planId] || "1year";
   }return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Subscriptions</h1>
-      <p className="mt-2 text-zinc-500">Each subscription gives you a full year of access to that question bank.</p>
+      <p className="mt-2 text-zinc-600">Choose a question bank and the plan length that suits you.</p>
 
       {myPlans.length > 0 && (
         <div className="mt-8">
@@ -153,6 +158,8 @@ export default function SubscriptionsPage() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {variants.map((plan) => {
                 const isActive = activeIds.includes(plan.id);
+                const term = termFor(plan.id);
+                const chosen = PRICE_OPTIONS.find((o) => o.id === term) || PRICE_OPTIONS[2];
                 return (
                   <div
                     key={plan.id}
@@ -166,18 +173,31 @@ export default function SubscriptionsPage() {
                     <p className="text-3xl">{plan.emoji}</p>
                     <p className="mt-3 text-lg font-extrabold text-zinc-900">{plan.variant}</p>
                     <p className="mt-1 text-sm text-zinc-500">{plan.title}</p>
-                    <div className="mt-4 flex items-baseline gap-2">
-                      <span className="text-2xl font-extrabold text-emerald-700">{plan.price}</span>
-                      <span className="text-sm font-semibold text-zinc-400">{plan.period}</span>
-                    </div>
-                    {isActive ? (
+
+                    {!isActive && (
+                      <>
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          {PRICE_OPTIONS.map((o) => (
+                            <button
+                              key={o.id}
+                              onClick={() => setSelectedTerm((s) => ({ ...s, [plan.id]: o.id }))}
+                              className={`rounded-xl border-2 px-3 py-2 text-center transition-colors ${term === o.id ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 hover:border-emerald-300"}`}
+                            >
+                              <span className="block text-xs font-semibold text-zinc-500">{o.label}</span>
+                              <span className="block text-sm font-extrabold text-emerald-700">{o.price}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <button disabled className="mt-4 w-full cursor-not-allowed rounded-full border-2 border-zinc-200 bg-zinc-50 px-6 py-2.5 font-bold text-zinc-400">
+                          {chosen.price} · Coming soon
+                        </button>
+                      </>
+                    )}
+
+                    {isActive && (
                       <Link href="/study" className="mt-4 block rounded-full bg-emerald-700 px-6 py-2.5 text-center font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
                         Start studying →
                       </Link>
-                    ) : (
-                      <button disabled className="mt-4 w-full cursor-not-allowed rounded-full border-2 border-zinc-200 bg-zinc-50 px-6 py-2.5 font-bold text-zinc-400">
-                        Coming soon
-                      </button>
                     )}
                   </div>
                 );

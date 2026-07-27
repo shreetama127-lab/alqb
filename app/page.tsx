@@ -7,6 +7,7 @@ import { supabase } from "@/app/lib/supabase";
 export default function Home() {
   const [mode, setMode] = useState<"login" | "signup">("signup");
   const [firstName, setFirstName] = useState("");
+  const [school, setSchool] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -35,7 +36,14 @@ export default function Home() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { first_name: firstName, agreed_terms_at: new Date().toISOString(), confirmed_age_16: true } },
+        options: {
+          data: {
+            first_name: firstName,
+            school: school,
+            agreed_terms_at: new Date().toISOString(),
+            confirmed_age_16: true,
+          },
+        },
       });
 
       if (error) {
@@ -62,6 +70,13 @@ export default function Home() {
         setMode("login");
         setLoading(false);
       } else {
+        if (data.user) {
+          await supabase.from("user_profiles").upsert({
+            user_id: data.user.id,
+            school: school,
+            updated_at: new Date().toISOString(),
+          });
+        }
         window.location.href = "/dashboard";
       }
     } else {
@@ -80,7 +95,9 @@ export default function Home() {
   }
 
   const canSubmit =
-    email && password && (mode === "login" || (agreeTerms && confirmAge));
+    email &&
+    password &&
+    (mode === "login" || (firstName && school && agreeTerms && confirmAge));
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
@@ -93,7 +110,7 @@ export default function Home() {
           <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
             Master A-Level Biology &amp; Chemistry.
           </h1>
-          <p className="mt-4 text-lg text-zinc-500">
+          <p className="mt-4 text-lg text-zinc-600">
             Exam-board specific questions with instant explanations, timed practice, and progress tracking.
           </p>
         </div>
@@ -111,7 +128,10 @@ export default function Home() {
           <form onSubmit={handleSubmit}>
             <div className="mt-6 flex flex-col gap-3">
               {mode === "signup" && (
-                <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
+                <>
+                  <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
+                  <input type="text" placeholder="School or institution name" value={school} onChange={(e) => setSchool(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
+                </>
               )}
               <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
               <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
@@ -152,21 +172,21 @@ export default function Home() {
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">📚</p>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Exam-board specific</h3>
-          <p className="mt-2 text-sm text-zinc-500">Mapped to your spec.</p>
+          <p className="mt-2 text-sm text-zinc-600">Mapped to your spec.</p>
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">💡</p>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Explained answers</h3>
-          <p className="mt-2 text-sm text-zinc-500">Every option explained.</p>
+          <p className="mt-2 text-sm text-zinc-600">Every option explained.</p>
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">📈</p>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Track progress</h3>
-          <p className="mt-2 text-sm text-zinc-500">See your accuracy grow.</p>
+          <p className="mt-2 text-sm text-zinc-600">See your accuracy grow.</p>
         </div>
       </div>
 
-      <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-400">
+      <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-500">
         <Link href="/terms" className="hover:text-emerald-700">Terms of Use</Link>
         <Link href="/privacy" className="hover:text-emerald-700">Privacy Policy</Link>
       </div>
