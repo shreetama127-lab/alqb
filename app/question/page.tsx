@@ -103,6 +103,7 @@ export default function QuestionPage() {
   const [showNotesReview, setShowNotesReview] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finalTime, setFinalTime] = useState(0);
+  const [savedSet, setSavedSet] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export default function QuestionPage() {
       const chosenStatuses = split("statuses");
       const limitParam = params.get("limit");
       const challengeParam = params.get("challenge");
+      const idsParam = params.get("ids");
 
       let query = supabase
         .from("questions")
@@ -150,6 +152,11 @@ export default function QuestionPage() {
             return false;
           });
         }
+      }
+
+      if (idsParam) {
+        const wanted = idsParam.split("~~").map((x) => parseInt(x, 10));
+        list = list.filter((qq) => wanted.includes(qq.id));
       }
 
       list = prepareQuestions(list);
@@ -196,6 +203,19 @@ export default function QuestionPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
+  async function saveSet(finalAnswers: AnswerRecord) {
+    if (savedSet || questions.length === 0) return;
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+    setSavedSet(true);
+    await supabase.from("question_sets").insert({
+      user_id: userData.user.id,
+      question_ids: questions.map((qq) => qq.id),
+      answered: Object.keys(finalAnswers).length,
+      correct: Object.values(finalAnswers).filter((a) => a.correct).length,
+    });
+  }
+
   if (loading)
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6">
@@ -238,7 +258,11 @@ export default function QuestionPage() {
     .filter((qq) => (notes[qq.id] || "").trim().length > 0)
     .map((qq) => ({ stem: qq.stem, topic: qq.topic, content: notes[qq.id] }));
 
-  function endSession() { setFinalTime(elapsed); setFinished(true); }
+  function endSession() {
+    setFinalTime(elapsed);
+    setFinished(true);
+    saveSet(answers);
+  }
 
   if (finished) {
     const byTopic: Record<string, { answered: number; correct: number }> = {};
@@ -342,8 +366,11 @@ export default function QuestionPage() {
             <Link href="/study" className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
               New session
             </Link>
+            <Link href="/sets" className="rounded-full border-2 border-emerald-200 bg-white px-8 py-3 text-lg font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">
+              🔁 My sets
+            </Link>
             <Link href="/dashboard" className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 text-lg font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
-              Back to dashboard
+              Dashboard
             </Link>
           </div>
         </div>
@@ -388,7 +415,11 @@ export default function QuestionPage() {
       if (error) console.error("Error saving answer:", error);
     }
     await loadStats(q.id);
-    if (Object.keys(updated).length === questions.length) { setFinalTime(elapsed); setFinished(true); }
+    if (Object.keys(updated).length === questions.length) {
+      setFinalTime(elapsed);
+      setFinished(true);
+      saveSet(updated);
+    }
   }
 
   async function flagQuestion() {
