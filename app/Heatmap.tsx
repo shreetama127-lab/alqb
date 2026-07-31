@@ -6,12 +6,12 @@ import { supabase } from "@/app/lib/supabase";
 type DayCount = { day: string; total: number };
 
 function shade(count: number, max: number) {
-  if (count <= 0) return "#eef2ff";
+  if (count <= 0) return "#fef3c7";
   const t = Math.min(count / Math.max(max, 1), 1);
-  if (t < 0.25) return "#c7d2fe";
-  if (t < 0.5) return "#a5b4fc";
-  if (t < 0.75) return "#818cf8";
-  return "#6366f1";
+  if (t < 0.25) return "#fde68a";
+  if (t < 0.5) return "#fcd34d";
+  if (t < 0.75) return "#f59e0b";
+  return "#d97706";
 }
 
 export default function Heatmap() {
@@ -37,7 +37,7 @@ export default function Heatmap() {
     load();
   }, []);
 
-  if (loading) return <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm"><p className="text-sm text-zinc-400">Loading activity…</p></div>;
+  if (loading) return <div className="rounded-3xl border border-amber-100 bg-white p-6 shadow-sm"><p className="text-sm text-zinc-400">Loading activity…</p></div>;
 
   const today = new Date();
   const start = new Date();
@@ -56,19 +56,18 @@ export default function Heatmap() {
   }
 
   const max = Math.max(1, ...Object.values(counts));
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   return (
-    <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-amber-100 bg-white p-7 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-zinc-900">📅 Activity</h2>
-        <span className="text-sm font-semibold text-zinc-400">{total} answered in the last 4 months</span>
+        <h2 className="text-xl font-extrabold text-zinc-900">📅 Your activity</h2>
+        <span className="text-sm font-semibold text-zinc-500">{total} answered in the last 4 months</span>
       </div>
 
-      <div className="mt-5 overflow-x-auto">
-        <div className="flex gap-[3px]">
+      <div className="mt-6 overflow-x-auto">
+        <div className="flex gap-[5px]">
           {weeks.map((week, wi) => (
-            <div key={wi} className="flex flex-col gap-[3px]">
+            <div key={wi} className="flex flex-col gap-[5px]">
               {week.map((day, di) => {
                 const key = day.toISOString().slice(0, 10);
                 const c = counts[key] || 0;
@@ -77,7 +76,7 @@ export default function Heatmap() {
                   <div
                     key={di}
                     title={future ? "" : `${key}: ${c} answered`}
-                    className="h-3 w-3 rounded-[3px]"
+                    className="h-5 w-5 rounded-[5px]"
                     style={{ backgroundColor: future ? "transparent" : shade(c, max) }}
                   />
                 );
@@ -87,13 +86,13 @@ export default function Heatmap() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-2 text-xs text-zinc-400">
+      <div className="mt-5 flex items-center justify-end gap-2 text-xs text-zinc-400">
         <span>Less</span>
-        <div className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: "#eef2ff" }} />
-        <div className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: "#c7d2fe" }} />
-        <div className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: "#a5b4fc" }} />
-        <div className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: "#818cf8" }} />
-        <div className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: "#6366f1" }} />
+        <div className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: "#fef3c7" }} />
+        <div className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: "#fde68a" }} />
+        <div className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: "#fcd34d" }} />
+        <div className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: "#f59e0b" }} />
+        <div className="h-4 w-4 rounded-[4px]" style={{ backgroundColor: "#d97706" }} />
         <span>More</span>
       </div>
     </div>

@@ -115,34 +115,39 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Welcome back, <span className="text-emerald-700">{firstName}</span></h1>
           <p className="mt-2 text-lg text-zinc-600">What would you like to study today?</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link href="/notes" className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 font-bold text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-            <span className="text-2xl">📝</span>
-            <span className="text-sm">Review notes{noteCount > 0 && <span className="ml-1 font-semibold text-zinc-400">({noteCount})</span>}</span>
+
+        <div className="flex flex-wrap items-stretch gap-4">
+          <Link href="/notes" className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-6 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
+            <span className="text-3xl">📝</span>
+            <span className="mt-1 text-2xl font-extrabold leading-tight text-emerald-700">{noteCount}</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">Notes</span>
           </Link>
-          <button onClick={() => setShowExamModal(true)} className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-            <span className="text-2xl">📆</span>
+
+          <button onClick={() => setShowExamModal(true)} className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-6 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
+            <span className="text-3xl">📆</span>
             {days !== null ? (
-              <span>
-                <span className="block text-lg font-extrabold leading-tight text-emerald-700">{days > 0 ? `${days} day${days === 1 ? "" : "s"}` : days === 0 ? "Today!" : "Passed"}</span>
-                <span className="block text-xs font-semibold text-zinc-400">until your exam</span>
-              </span>
-            ) : (<span className="text-sm font-bold text-emerald-700">Set exam date</span>)}
+              <>
+                <span className="mt-1 text-2xl font-extrabold leading-tight text-emerald-700">{days > 0 ? days : days === 0 ? "Today" : "—"}</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">{days > 0 ? `day${days === 1 ? "" : "s"} to exam` : days === 0 ? "exam day!" : "exam passed"}</span>
+              </>
+            ) : (
+              <>
+                <span className="mt-1 text-lg font-extrabold leading-tight text-emerald-700">Set date</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">exam countdown</span>
+              </>
+            )}
           </button>
-          {streak > 0 && (
-            <div className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-              <span className="text-2xl">🔥</span>
-              <span>
-                <span className="block text-lg font-extrabold leading-tight text-orange-600">{streak}</span>
-                <span className="block text-xs font-semibold text-orange-600/70">day{streak === 1 ? "" : "s"} in a row</span>
-              </span>
-            </div>
-          )}
+
+          <div className="flex flex-col justify-center rounded-2xl border border-orange-100 bg-orange-50 px-6 py-4">
+            <span className="text-3xl">🔥</span>
+            <span className="mt-1 text-2xl font-extrabold leading-tight text-orange-600">{streak}</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-orange-600/70">day{streak === 1 ? "" : "s"} streak</span>
+          </div>
         </div>
       </div>
 
@@ -170,7 +175,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-4">
           <span className="text-3xl">🔁</span>
           <div>
-            <p className="font-bold text-zinc-900">Review &amp; redo your sets</p>
+            <p className="font-bold text-zinc-900">Review previous sessions</p>
             <p className="text-sm text-zinc-500">{setCount > 0 ? `${setCount} saved set${setCount === 1 ? "" : "s"}` : "Your completed sessions appear here"}</p>
           </div>
         </div>
