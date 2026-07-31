@@ -73,9 +73,10 @@ export default function SettingsPage() {
     await supabase.from("answers").delete().eq("user_id", userId);
     await supabase.from("notes").delete().eq("user_id", userId);
     await supabase.from("flags").delete().eq("user_id", userId);
-    setBusy(false);
-    setResetMsg("All your progress has been reset.");
+    await supabase.from("question_sets").delete().eq("user_id", userId);
+    setResetMsg("All your progress has been reset. Taking you back…");
     setResetText("");
+    setTimeout(() => { window.location.href = "/dashboard"; }, 1200);
   }
 
   if (loading)
@@ -128,7 +129,7 @@ export default function SettingsPage() {
         <section className="rounded-3xl border border-red-200 bg-red-50/40 p-6 shadow-sm">
           <h2 className="text-lg font-bold text-red-700">Reset progress</h2>
           <p className="mt-2 text-sm text-zinc-600">
-            This permanently deletes all your answers, notes and flags. Your account stays, but your history is wiped. This can&apos;t be undone.
+            This permanently deletes all your answers, notes, flags and saved sets. Your account stays, but your history is wiped and everything goes back to zero. This can&apos;t be undone.
           </p>
           {resetMsg ? (
             <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{resetMsg}</p>
