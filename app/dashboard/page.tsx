@@ -171,16 +171,29 @@ export default function DashboardPage() {
         <Heatmap />
       </div>
 
-      <Link href="/sets" className="mt-8 flex items-center justify-between rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300">
-        <div className="flex items-center gap-4">
-          <span className="text-3xl">🔁</span>
-          <div>
-            <p className="font-bold text-zinc-900">Review previous sessions</p>
-            <p className="text-sm text-zinc-500">{setCount > 0 ? `${setCount} saved set${setCount === 1 ? "" : "s"}` : "Your completed sessions appear here"}</p>
+      <div className="mt-8 grid gap-5 sm:grid-cols-2">
+        <Link href="/sets" className="flex items-center justify-between rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300">
+          <div className="flex items-center gap-4">
+            <span className="text-3xl">🔁</span>
+            <div>
+              <p className="font-bold text-zinc-900">Review previous sessions</p>
+              <p className="text-sm text-zinc-500">{setCount > 0 ? `${setCount} saved` : "Your sessions appear here"}</p>
+            </div>
           </div>
-        </div>
-        <span className="font-bold text-emerald-700">Open →</span>
-      </Link>
+          <span className="font-bold text-emerald-700">→</span>
+        </Link>
+
+        <Link href="/customise" className="flex items-center justify-between rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300">
+          <div className="flex items-center gap-4">
+            <span className="text-3xl">🎯</span>
+            <div>
+              <p className="font-bold text-zinc-900">Customise sets</p>
+              <p className="text-sm text-zinc-500">Build a paper or topic mix</p>
+            </div>
+          </div>
+          <span className="font-bold text-emerald-700">→</span>
+        </Link>
+      </div>
     </main>
   );
 }
