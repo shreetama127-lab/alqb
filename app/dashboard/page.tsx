@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import { PLANS, FREE_PLAN_IDS } from "@/app/lib/plans";
 import Heatmap from "@/app/Heatmap";
+import ProgressGraph from "@/app/ProgressGraph";
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -169,6 +170,10 @@ export default function DashboardPage() {
 
       <div className="mt-8">
         <Heatmap />
+      </div>
+
+      <div className="mt-8">
+        <ProgressGraph />
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
