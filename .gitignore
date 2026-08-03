@@ -39,3 +39,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtbGV6cGdoaXV5b2NucWhqdmJjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTYzOTY0NywiZXhwIjoyMDk3MjE1NjQ3fQ.eexOCAQa3ymjqDJLzX78dlRXqqw0DWlzFkWZiS5UD0I
