@@ -20,7 +20,7 @@ type Question = {
 type AnswerRecord = Record<number, { selected: string; correct: boolean }>;
 
 const REPORT_EMAIL = "info.alqb@gmail.com";
-const TAKEAWAY_HEADINGS = ["key takeaway", "common mistake", "common mistakes", "exam tip", "exam tips"];
+const TAKEAWAY_HEADINGS = ["key takeaway", "highlights", "common mistake", "common mistakes", "exam tip", "exam tips"];
 
 function fmt(total: number) {
   const m = Math.floor(Math.abs(total) / 60);
@@ -197,8 +197,11 @@ export default function QuestionPage() {
     return () => clearInterval(id);
   }, [timed, paused]);
 
+  // Timer auto-resumes when returning to the tab (no auto-pause).
   useEffect(() => {
-    function handleVisibility() { if (document.hidden) setPaused(true); }
+    function handleVisibility() {
+      if (!document.hidden) setPaused(false);
+    }
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
@@ -445,6 +448,7 @@ export default function QuestionPage() {
   }
 
   function goToQuestion(i: number) { setIndex(i); setPending(null); setNoteSaved(false); }
+  function prevQuestion() { if (index > 0) goToQuestion(index - 1); }
   function nextQuestion() { if (index + 1 < questions.length) goToQuestion(index + 1); else endSession(); }
 
   return (
@@ -541,7 +545,7 @@ export default function QuestionPage() {
               const isActive = activeChoice === option.letter;
               const isPicked = submitted && thisAnswer.selected === option.letter;
               const revealOpen = openExplain[q.id + "-" + option.letter];
-              let style = "border-zinc-200 hover:border-emerald-400 hover:bg-emerald-50/50";
+              let style = "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50";
               if (submitted && option.correct) style = "border-emerald-500 bg-emerald-50";
               else if (submitted && isActive) style = "border-red-300 bg-red-50";
               else if (isActive) style = "border-emerald-500 bg-emerald-50";
@@ -579,9 +583,16 @@ export default function QuestionPage() {
             )}
           </div>
 
+          {/* Prev / Next arrows above the highlights */}
+          <div className="mt-5 flex items-center justify-center gap-4">
+            <button onClick={prevQuestion} disabled={index === 0} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-200 text-lg font-bold text-zinc-500 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" title="Previous question">↑</button>
+            <span className="text-sm font-semibold text-zinc-400">{index + 1} / {questions.length}</span>
+            <button onClick={() => { if (index + 1 < questions.length) goToQuestion(index + 1); }} disabled={index + 1 >= questions.length} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-200 text-lg font-bold text-zinc-500 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" title="Next question">↓</button>
+          </div>
+
           {showTakeaway && (
             <div className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
-              <p className="font-bold text-indigo-800">💡 Key takeaway</p>
+              <p className="font-bold text-indigo-800">✨ Highlights</p>
               <TakeawayText text={q.key_takeaway || ""} />
             </div>
           )}
