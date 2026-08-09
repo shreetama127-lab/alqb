@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 
 type QRow = { id: number; topic: string | null; module: string | null };
-type TopicInfo = { topic: string; count: number; done: number };
+type TopicInfo = { topic: string; count: number; done: number; pct: number | null };
 type ModuleGroup = { module: string; title: string; topics: TopicInfo[]; count: number; done: number };
 
 const MODULE_TITLES: Record<string, string> = {
@@ -30,10 +30,13 @@ export default function StudyPage() {
   const router = useRouter();
   const [rows, setRows] = useState<QRow[]>([]);
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set());
+  const [topicPct, setTopicPct] = useState<Record<string, number>>({});
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [openModules, setOpenModules] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPopup, setShowPopup] = useState(false);
+  const [weakestFirst, setWeakestFirst] = useState(false);
+  const [spacedRep, setSpacedRep] = useState(false);
 
   const [amount, setAmount] = useState(20);
   const [difficulties, setDifficulties] = useState<string[]>([]);
@@ -73,6 +76,13 @@ export default function StudyPage() {
           const correct = ans.filter((a) => a.is_correct).length;
           setAccuracy(Math.round((correct / ans.length) * 100));
         }
+
+        const { data: accData } = await supabase.rpc("topic_accuracy");
+        if (accData) {
+          const map: Record<string, number> = {};
+          (accData as { topic: string; pct: number }[]).forEach((t) => { map[t.topic] = Number(t.pct); });
+          setTopicPct(map);
+        }
       }
       setLoading(false);
     }
@@ -85,17 +95,17 @@ export default function StudyPage() {
   rows.forEach((r) => {
     const m = r.module || "Other";
     const t = r.topic || "Other";
-    if (!byModule[m]) {
-      byModule[m] = {};
-      moduleOrder.push(m);
-    }
-    if (!byModule[m][t]) byModule[m][t] = { topic: t, count: 0, done: 0 };
+    if (!byModule[m]) { byModule[m] = {}; moduleOrder.push(m); }
+    if (!byModule[m][t]) byModule[m][t] = { topic: t, count: 0, done: 0, pct: topicPct[t] ?? null };
     byModule[m][t].count += 1;
     if (answeredIds.has(r.id)) byModule[m][t].done += 1;
   });
   moduleOrder.sort();
   moduleOrder.forEach((m) => {
-    const topics = Object.values(byModule[m]);
+    let topics = Object.values(byModule[m]);
+    if (weakestFirst) {
+      topics = [...topics].sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+    }
     groups.push({
       module: m,
       title: MODULE_TITLES[m] || m,
@@ -119,12 +129,8 @@ export default function StudyPage() {
   function toggleIn(list: string[], setList: (v: string[]) => void, value: string) {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   }
-  function selectAllTopics() {
-    setSelectedTopics(rows.map((r) => r.topic || "Other"));
-  }
-  function clearAllTopics() {
-    setSelectedTopics([]);
-  }
+  function selectAllTopics() { setSelectedTopics(rows.map((r) => r.topic || "Other")); }
+  function clearAllTopics() { setSelectedTopics([]); }
 
   const selectedCount = rows.filter((r) => selectedTopics.includes(r.topic || "Other")).length;
   const maxAmount = Math.max(selectedCount, 1);
@@ -135,6 +141,7 @@ export default function StudyPage() {
     if (difficulties.length > 0) params.set("difficulties", difficulties.join("~~"));
     if (yields.length > 0) params.set("yields", yields.join("~~"));
     if (statuses.length > 0) params.set("statuses", statuses.join("~~"));
+    if (spacedRep) params.set("spaced", "1");
     if (challenge) {
       params.set("challenge", String(challengeMins));
     } else {
@@ -144,11 +151,7 @@ export default function StudyPage() {
   }
 
   if (loading)
-    return (
-      <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6">
-        <p className="text-zinc-400">Loading…</p>
-      </main>
-    );return (
+    return <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6"><p className="text-zinc-400">Loading…</p></main>;return (
     <main className="mx-auto max-w-4xl px-6 py-10 pb-32">
       {hasAnswers && (
         <div className="mb-8 grid gap-4 sm:grid-cols-3">
@@ -179,12 +182,11 @@ export default function StudyPage() {
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Choose what to study</h1>
       <p className="mt-2 text-zinc-600">All topics are selected by default. Open a module to pick specific topics.</p>
 
-      <div className="mt-6 flex gap-3 text-sm font-semibold">
-        <button onClick={selectAllTopics} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">
-          Select all
-        </button>
-        <button onClick={clearAllTopics} className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-zinc-600 transition-colors hover:bg-zinc-50">
-          Clear
+      <div className="mt-6 flex flex-wrap items-center gap-3 text-sm font-semibold">
+        <button onClick={selectAllTopics} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">Select all</button>
+        <button onClick={clearAllTopics} className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-zinc-600 transition-colors hover:bg-zinc-50">Clear</button>
+        <button onClick={() => setWeakestFirst((w) => !w)} className={`rounded-full px-4 py-2 transition-colors ${weakestFirst ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
+          {weakestFirst ? "↓ Weakest first" : "Order: default"}
         </button>
       </div>
 
@@ -198,20 +200,12 @@ export default function StudyPage() {
           return (
             <div key={g.module} className={`rounded-3xl border-2 bg-white shadow-sm transition-all ${someOn ? "border-emerald-200" : "border-zinc-200"}`}>
               <div className="flex items-center gap-4 px-5 py-4">
-                <button
-                  onClick={() => toggleModuleAll(g)}
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold ${
-                    allOn ? "border-emerald-600 bg-emerald-600 text-white" : someOn ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-zinc-300 text-transparent"
-                  }`}
-                >
-                  ✓
-                </button>
+                <button onClick={() => toggleModuleAll(g)} className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 text-sm font-bold ${allOn ? "border-emerald-600 bg-emerald-600 text-white" : someOn ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-zinc-300 text-transparent"}`}>✓</button>
                 <button onClick={() => toggleModuleOpen(g.module)} className="flex flex-1 items-center justify-between gap-4 text-left">
                   <span className="font-bold text-zinc-800">{g.title}</span>
                   <span className="text-emerald-600">{isOpen ? "▴" : "▾"}</span>
                 </button>
               </div>
-
               <div className="px-5 pb-4">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100">
                   <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
@@ -226,18 +220,15 @@ export default function StudyPage() {
                       const isOn = selectedTopics.includes(t.topic);
                       const tPct = t.count > 0 ? Math.round((t.done / t.count) * 100) : 0;
                       return (
-                        <button
-                          key={t.topic}
-                          onClick={() => toggleTopic(t.topic)}
-                          className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
-                            isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"
-                          }`}
-                        >
+                        <button key={t.topic} onClick={() => toggleTopic(t.topic)} className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"}`}>
                           <div className="flex items-center gap-3">
-                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>
-                              ✓
-                            </span>
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>✓</span>
                             <span className="font-semibold text-zinc-800">{t.topic}</span>
+                            {t.pct !== null && (
+                              <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-bold ${t.pct >= 70 ? "bg-emerald-50 text-emerald-700" : t.pct >= 40 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>
+                                {t.pct}%
+                              </span>
+                            )}
                           </div>
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
                             <div className="h-full rounded-full bg-emerald-500" style={{ width: `${tPct}%` }} />
@@ -257,11 +248,7 @@ export default function StudyPage() {
       <div className="fixed inset-x-0 bottom-0 border-t border-emerald-100 bg-white/90 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
           <p className="font-semibold text-zinc-600">{selectedCount} questions selected</p>
-          <button
-            onClick={() => setShowPopup(true)}
-            disabled={selectedCount === 0}
-            className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none"
-          >
+          <button onClick={() => setShowPopup(true)} disabled={selectedCount === 0} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
             Start Session →
           </button>
         </div>
@@ -276,6 +263,16 @@ export default function StudyPage() {
             </div>
 
             <div className="mt-6 flex flex-col gap-6">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                <label className="flex cursor-pointer items-center justify-between">
+                  <span>
+                    <span className="block font-bold text-zinc-900">🎯 Focus on my weak topics</span>
+                    <span className="block text-xs text-zinc-500">Show more questions from topics you score lowest in.</span>
+                  </span>
+                  <input type="checkbox" checked={spacedRep} onChange={(e) => setSpacedRep(e.target.checked)} className="h-6 w-6 accent-emerald-600" />
+                </label>
+              </div>
+
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                 <label className="flex cursor-pointer items-center justify-between">
                   <span>
@@ -299,17 +296,7 @@ export default function StudyPage() {
                 <div>
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
-                    <input
-                      type="number"
-                      min={1}
-                      max={maxAmount}
-                      value={amount}
-                      onChange={(e) => {
-                        const v = parseInt(e.target.value, 10);
-                        if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), maxAmount));
-                      }}
-                      className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400"
-                    />
+                    <input type="number" min={1} max={maxAmount} value={amount} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), maxAmount)); }} className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400" />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {COUNT_PRESETS.map((n) => (
@@ -317,18 +304,9 @@ export default function StudyPage() {
                         {n}
                       </button>
                     ))}
-                    <button onClick={() => setAmount(maxAmount)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === maxAmount ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                      All
-                    </button>
+                    <button onClick={() => setAmount(maxAmount)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === maxAmount ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={maxAmount}
-                    value={amount}
-                    onChange={(e) => setAmount(parseInt(e.target.value, 10))}
-                    className="mt-3 w-full accent-emerald-600"
-                  />
+                  <input type="range" min={1} max={maxAmount} value={amount} onChange={(e) => setAmount(parseInt(e.target.value, 10))} className="mt-3 w-full accent-emerald-600" />
                   <p className="mt-1 text-xs text-zinc-400">Up to {selectedCount} available</p>
                 </div>
               )}
@@ -336,13 +314,9 @@ export default function StudyPage() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button onClick={() => setDifficulties([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                    All
-                  </button>
+                  <button onClick={() => setDifficulties([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   {DIFFICULTIES.map((d) => (
-                    <button key={d} onClick={() => toggleIn(difficulties, setDifficulties, d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.includes(d) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                      {d}
-                    </button>
+                    <button key={d} onClick={() => toggleIn(difficulties, setDifficulties, d)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.includes(d) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{d}</button>
                   ))}
                 </div>
               </div>
@@ -350,13 +324,9 @@ export default function StudyPage() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button onClick={() => setYields([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                    All
-                  </button>
+                  <button onClick={() => setYields([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   {YIELDS.map((y) => (
-                    <button key={y} onClick={() => toggleIn(yields, setYields, y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.includes(y) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                      {y}
-                    </button>
+                    <button key={y} onClick={() => toggleIn(yields, setYields, y)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.includes(y) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{y}</button>
                   ))}
                 </div>
               </div>
@@ -366,18 +336,14 @@ export default function StudyPage() {
                 <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {STATUSES.map((s) => (
-                    <button key={s.value} onClick={() => toggleIn(statuses, setStatuses, s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${statuses.includes(s.value) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                      {s.label}
-                    </button>
+                    <button key={s.value} onClick={() => toggleIn(statuses, setStatuses, s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${statuses.includes(s.value) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{s.label}</button>
                   ))}
                 </div>
               </div>
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button onClick={() => setShowPopup(false)} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
-                Back
-              </button>
+              <button onClick={() => setShowPopup(false)} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">Back</button>
               <button onClick={launchSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
                 {challenge ? `Start ${challengeMins}-min challenge →` : "Start Session →"}
               </button>

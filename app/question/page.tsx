@@ -159,7 +159,23 @@ export default function QuestionPage() {
         list = list.filter((qq) => wanted.includes(qq.id));
       }
 
-      list = prepareQuestions(list);
+      const spacedParam = params.get("spaced");
+      if (spacedParam) {
+        const { data: userData2 } = await supabase.auth.getUser();
+        if (userData2.user) {
+          const { data: accData } = await supabase.rpc("topic_accuracy");
+          const pctByTopic: Record<string, number> = {};
+          (accData || []).forEach((t: { topic: string; pct: number }) => { pctByTopic[t.topic] = Number(t.pct); });
+          // weight: weaker topics get a higher chance. Unattempted topics treated as medium.
+          list = [...list].sort((a, b) => {
+            const wa = 100 - (pctByTopic[a.topic || ""] ?? 50) + Math.random() * 40;
+            const wb = 100 - (pctByTopic[b.topic || ""] ?? 50) + Math.random() * 40;
+            return wb - wa;
+          });
+        }
+      } else {
+        list = prepareQuestions(list);
+      }
 
       if (challengeParam) {
         const mins = parseInt(challengeParam, 10);
