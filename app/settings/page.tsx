@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [handleMsg, setHandleMsg] = useState("");
   const [resetText, setResetText] = useState("");
   const [resetMsg, setResetMsg] = useState("");
+  const [resetErr, setResetErr] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -70,11 +71,34 @@ export default function SettingsPage() {
   async function resetProgress() {
     if (!userId || resetText !== "RESET") return;
     setBusy(true);
-    await supabase.from("answers").delete().eq("user_id", userId);
-    await supabase.from("notes").delete().eq("user_id", userId);
-    await supabase.from("flags").delete().eq("user_id", userId);
-    await supabase.from("question_sets").delete().eq("user_id", userId);
+    setResetMsg("");
+    setResetErr(false);
+
+    const errors: string[] = [];
+
+    const a = await supabase.from("answers").delete().eq("user_id", userId);
+    if (a.error) errors.push("answers: " + a.error.message);
+
+    const n = await supabase.from("notes").delete().eq("user_id", userId);
+    if (n.error) errors.push("notes: " + n.error.message);
+
+    const f = await supabase.from("flags").delete().eq("user_id", userId);
+    if (f.error) errors.push("flags: " + f.error.message);
+
+    const s = await supabase.from("question_sets").delete().eq("user_id", userId);
+    if (s.error) errors.push("sets: " + s.error.message);
+
+    setBusy(false);
+
+    if (errors.length > 0) {
+      console.error("Reset errors:", errors);
+      setResetMsg("Some data couldn't be deleted: " + errors.join("; "));
+      setResetErr(true);
+      return;
+    }
+
     setResetMsg("All your progress has been reset. Taking you back…");
+    setResetErr(false);
     setResetText("");
     setTimeout(() => { window.location.href = "/dashboard"; }, 1200);
   }
@@ -131,15 +155,16 @@ export default function SettingsPage() {
           <p className="mt-2 text-sm text-zinc-600">
             This permanently deletes all your answers, notes, flags and saved sets. Your account stays, but your history is wiped and everything goes back to zero. This can&apos;t be undone.
           </p>
-          {resetMsg ? (
+          {resetMsg && !resetErr ? (
             <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{resetMsg}</p>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
               <p className="text-sm font-semibold text-zinc-600">Type <span className="rounded bg-white px-1.5 py-0.5 font-mono text-red-600">RESET</span> to confirm:</p>
               <input type="text" value={resetText} onChange={(e) => setResetText(e.target.value)} placeholder="RESET" className="rounded-xl border border-red-200 px-4 py-3 text-zinc-900 outline-none focus:border-red-400" />
               <button onClick={resetProgress} disabled={busy || resetText !== "RESET"} className="rounded-full bg-red-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-zinc-300">
-                Reset all my progress
+                {busy ? "Resetting…" : "Reset all my progress"}
               </button>
+              {resetMsg && resetErr && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">{resetMsg}</p>}
             </div>
           )}
         </section>
