@@ -41,6 +41,12 @@ export default function SetsPage() {
     router.push("/question?" + params.toString());
   }
 
+  function review(s: SetRow) {
+    const params = new URLSearchParams();
+    params.set("ids", s.question_ids.join("~~"));
+    router.push("/review?" + params.toString());
+  }
+
   async function deleteSet(id: number) {
     if (!confirm("Delete this set?")) return;
     await supabase.from("question_sets").delete().eq("id", id);
@@ -60,14 +66,14 @@ export default function SetsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Your question sets</h1>
-      <p className="mt-2 text-zinc-600">Every session you complete is saved here. Redo any set to practise it again (reshuffled).</p>
+      <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Review previous sessions</h1>
+      <p className="mt-2 text-zinc-600">Redo a set (reshuffled) to test yourself, or review it read-only to go through the answers.</p>
 
       {sets.length === 0 ? (
         <div className="mt-10 rounded-3xl border border-emerald-100 bg-white p-12 text-center shadow-sm">
           <p className="text-5xl">📚</p>
           <h2 className="mt-4 text-xl font-bold text-zinc-900">No sets yet</h2>
-          <p className="mt-2 text-zinc-500">Finish a study session and it&apos;ll be saved here to redo later.</p>
+          <p className="mt-2 text-zinc-500">Finish a study session and it&apos;ll be saved here.</p>
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-3">
@@ -81,7 +87,10 @@ export default function SetsPage() {
                   <p className="text-sm text-zinc-500">{when} · scored {s.correct}/{s.answered} ({pct}%)</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => redo(s)} className="rounded-full bg-emerald-700 px-6 py-2.5 font-bold text-white transition-colors hover:bg-emerald-800">
+                  <button onClick={() => review(s)} className="rounded-full border-2 border-indigo-200 bg-white px-5 py-2.5 font-bold text-indigo-700 transition-colors hover:border-indigo-400">
+                    👁 Review
+                  </button>
+                  <button onClick={() => redo(s)} className="rounded-full bg-emerald-700 px-5 py-2.5 font-bold text-white transition-colors hover:bg-emerald-800">
                     🔁 Redo
                   </button>
                   <button onClick={() => deleteSet(s.id)} className="rounded-full border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-500 transition-colors hover:border-red-300 hover:text-red-500">
