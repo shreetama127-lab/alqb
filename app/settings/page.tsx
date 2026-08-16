@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [handle, setHandle] = useState<string | null>(null);
 
+  const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [passMsg, setPassMsg] = useState("");
@@ -47,13 +48,28 @@ export default function SettingsPage() {
 
   async function changePassword() {
     setPassMsg("");
-    if (newPass.length < 6) { setPassMsg("Password must be at least 6 characters."); setPassErr(true); return; }
-    if (newPass !== confirmPass) { setPassMsg("Passwords don't match."); setPassErr(true); return; }
+    if (!currentPass) { setPassMsg("Please enter your current password."); setPassErr(true); return; }
+    if (newPass.length < 6) { setPassMsg("New password must be at least 6 characters."); setPassErr(true); return; }
+    if (newPass !== confirmPass) { setPassMsg("New passwords don't match."); setPassErr(true); return; }
     setBusy(true);
+
+    // Verify current password by re-signing in
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email, password: currentPass });
+    if (verifyError) {
+      setBusy(false);
+      setPassMsg("Your current password is incorrect.");
+      setPassErr(true);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPass });
     setBusy(false);
     if (error) { setPassMsg(error.message); setPassErr(true); }
-    else { setPassMsg("Password updated."); setPassErr(false); setNewPass(""); setConfirmPass(""); }
+    else {
+      setPassMsg("Password updated.");
+      setPassErr(false);
+      setCurrentPass(""); setNewPass(""); setConfirmPass("");
+    }
   }
 
   async function regenerateHandle() {
@@ -73,30 +89,21 @@ export default function SettingsPage() {
     setBusy(true);
     setResetMsg("");
     setResetErr(false);
-
     const errors: string[] = [];
-
     const a = await supabase.from("answers").delete().eq("user_id", userId);
     if (a.error) errors.push("answers: " + a.error.message);
-
     const n = await supabase.from("notes").delete().eq("user_id", userId);
     if (n.error) errors.push("notes: " + n.error.message);
-
     const f = await supabase.from("flags").delete().eq("user_id", userId);
     if (f.error) errors.push("flags: " + f.error.message);
-
     const s = await supabase.from("question_sets").delete().eq("user_id", userId);
     if (s.error) errors.push("sets: " + s.error.message);
-
     setBusy(false);
-
     if (errors.length > 0) {
-      console.error("Reset errors:", errors);
       setResetMsg("Some data couldn't be deleted: " + errors.join("; "));
       setResetErr(true);
       return;
     }
-
     setResetMsg("All your progress has been reset. Taking you back…");
     setResetErr(false);
     setResetText("");
@@ -104,11 +111,7 @@ export default function SettingsPage() {
   }
 
   if (loading)
-    return (
-      <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6">
-        <p className="text-zinc-400">Loading…</p>
-      </main>
-    );
+    return <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6"><p className="text-zinc-400">Loading…</p></main>;
 
   if (!loggedIn)
     return (
@@ -130,40 +133,34 @@ export default function SettingsPage() {
           <p className="mt-4 text-sm text-zinc-500">Your discussion name</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <span className="rounded-full bg-emerald-50 px-4 py-1.5 font-bold text-emerald-700">{handle || "Not set yet"}</span>
-            <button onClick={regenerateHandle} disabled={busy} className="rounded-full border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50">
-              🎲 Regenerate
-            </button>
+            <button onClick={regenerateHandle} disabled={busy} className="rounded-full border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50">🎲 Regenerate</button>
           </div>
           {handleMsg && <p className="mt-2 text-sm font-semibold text-emerald-600">{handleMsg}</p>}
-          <p className="mt-2 text-xs text-zinc-400">This anonymous name is shown next to your comments. A name is created the first time you post.</p>
+          <p className="mt-2 text-xs text-zinc-400">This anonymous name is shown next to your comments.</p>
         </section>
 
         <section className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-zinc-900">Change password</h2>
+          <p className="mt-1 text-sm text-zinc-500">For your security, enter your current password first.</p>
           <div className="mt-4 flex flex-col gap-3">
+            <input type="password" placeholder="Current password" value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
             <input type="password" placeholder="New password" value={newPass} onChange={(e) => setNewPass(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
             <input type="password" placeholder="Confirm new password" value={confirmPass} onChange={(e) => setConfirmPass(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-            <button onClick={changePassword} disabled={busy || !newPass || !confirmPass} className="rounded-full bg-emerald-700 px-6 py-2.5 font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">
-              Update password
-            </button>
+            <button onClick={changePassword} disabled={busy || !currentPass || !newPass || !confirmPass} className="rounded-full bg-emerald-700 px-6 py-2.5 font-bold text-white transition-colors hover:bg-emerald-800 disabled:bg-zinc-300">Update password</button>
           </div>
           {passMsg && <p className={`mt-3 rounded-xl px-4 py-2 text-sm font-semibold ${passErr ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{passMsg}</p>}
         </section>
 
         <section className="rounded-3xl border border-red-200 bg-red-50/40 p-6 shadow-sm">
           <h2 className="text-lg font-bold text-red-700">Reset progress</h2>
-          <p className="mt-2 text-sm text-zinc-600">
-            This permanently deletes all your answers, notes, flags and saved sets. Your account stays, but your history is wiped and everything goes back to zero. This can&apos;t be undone.
-          </p>
+          <p className="mt-2 text-sm text-zinc-600">This permanently deletes all your answers, notes, flags and saved sets. This can&apos;t be undone.</p>
           {resetMsg && !resetErr ? (
             <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{resetMsg}</p>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
               <p className="text-sm font-semibold text-zinc-600">Type <span className="rounded bg-white px-1.5 py-0.5 font-mono text-red-600">RESET</span> to confirm:</p>
               <input type="text" value={resetText} onChange={(e) => setResetText(e.target.value)} placeholder="RESET" className="rounded-xl border border-red-200 px-4 py-3 text-zinc-900 outline-none focus:border-red-400" />
-              <button onClick={resetProgress} disabled={busy || resetText !== "RESET"} className="rounded-full bg-red-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-zinc-300">
-                {busy ? "Resetting…" : "Reset all my progress"}
-              </button>
+              <button onClick={resetProgress} disabled={busy || resetText !== "RESET"} className="rounded-full bg-red-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-zinc-300">{busy ? "Resetting…" : "Reset all my progress"}</button>
               {resetMsg && resetErr && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">{resetMsg}</p>}
             </div>
           )}
