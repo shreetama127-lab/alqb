@@ -27,6 +27,10 @@ export default function SettingsPage() {
   const [passErr, setPassErr] = useState(false);
 
   const [handleMsg, setHandleMsg] = useState("");
+
+  const [wipeAnswers, setWipeAnswers] = useState(true);
+  const [wipeNotes, setWipeNotes] = useState(false);
+  const [wipeSets, setWipeSets] = useState(false);
   const [resetText, setResetText] = useState("");
   const [resetMsg, setResetMsg] = useState("");
   const [resetErr, setResetErr] = useState(false);
@@ -52,24 +56,12 @@ export default function SettingsPage() {
     if (newPass.length < 6) { setPassMsg("New password must be at least 6 characters."); setPassErr(true); return; }
     if (newPass !== confirmPass) { setPassMsg("New passwords don't match."); setPassErr(true); return; }
     setBusy(true);
-
-    // Verify current password by re-signing in
     const { error: verifyError } = await supabase.auth.signInWithPassword({ email, password: currentPass });
-    if (verifyError) {
-      setBusy(false);
-      setPassMsg("Your current password is incorrect.");
-      setPassErr(true);
-      return;
-    }
-
+    if (verifyError) { setBusy(false); setPassMsg("Your current password is incorrect."); setPassErr(true); return; }
     const { error } = await supabase.auth.updateUser({ password: newPass });
     setBusy(false);
     if (error) { setPassMsg(error.message); setPassErr(true); }
-    else {
-      setPassMsg("Password updated.");
-      setPassErr(false);
-      setCurrentPass(""); setNewPass(""); setConfirmPass("");
-    }
+    else { setPassMsg("Password updated."); setPassErr(false); setCurrentPass(""); setNewPass(""); setConfirmPass(""); }
   }
 
   async function regenerateHandle() {
@@ -86,25 +78,30 @@ export default function SettingsPage() {
 
   async function resetProgress() {
     if (!userId || resetText !== "RESET") return;
+    if (!wipeAnswers && !wipeNotes && !wipeSets) { setResetMsg("Tick at least one thing to reset."); setResetErr(true); return; }
     setBusy(true);
     setResetMsg("");
     setResetErr(false);
     const errors: string[] = [];
-    const a = await supabase.from("answers").delete().eq("user_id", userId);
-    if (a.error) errors.push("answers: " + a.error.message);
-    const n = await supabase.from("notes").delete().eq("user_id", userId);
-    if (n.error) errors.push("notes: " + n.error.message);
-    const f = await supabase.from("flags").delete().eq("user_id", userId);
-    if (f.error) errors.push("flags: " + f.error.message);
-    const s = await supabase.from("question_sets").delete().eq("user_id", userId);
-    if (s.error) errors.push("sets: " + s.error.message);
-    setBusy(false);
-    if (errors.length > 0) {
-      setResetMsg("Some data couldn't be deleted: " + errors.join("; "));
-      setResetErr(true);
-      return;
+
+    if (wipeAnswers) {
+      const a = await supabase.from("answers").delete().eq("user_id", userId);
+      if (a.error) errors.push("answers: " + a.error.message);
+      const f = await supabase.from("flags").delete().eq("user_id", userId);
+      if (f.error) errors.push("flags: " + f.error.message);
     }
-    setResetMsg("All your progress has been reset. Taking you back…");
+    if (wipeNotes) {
+      const n = await supabase.from("notes").delete().eq("user_id", userId);
+      if (n.error) errors.push("notes: " + n.error.message);
+    }
+    if (wipeSets) {
+      const s = await supabase.from("question_sets").delete().eq("user_id", userId);
+      if (s.error) errors.push("sets: " + s.error.message);
+    }
+
+    setBusy(false);
+    if (errors.length > 0) { setResetMsg("Some data couldn't be deleted: " + errors.join("; ")); setResetErr(true); return; }
+    setResetMsg("Done. Taking you back…");
     setResetErr(false);
     setResetText("");
     setTimeout(() => { window.location.href = "/dashboard"; }, 1200);
@@ -136,7 +133,6 @@ export default function SettingsPage() {
             <button onClick={regenerateHandle} disabled={busy} className="rounded-full border border-emerald-200 px-4 py-1.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50">🎲 Regenerate</button>
           </div>
           {handleMsg && <p className="mt-2 text-sm font-semibold text-emerald-600">{handleMsg}</p>}
-          <p className="mt-2 text-xs text-zinc-400">This anonymous name is shown next to your comments.</p>
         </section>
 
         <section className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
@@ -153,14 +149,28 @@ export default function SettingsPage() {
 
         <section className="rounded-3xl border border-red-200 bg-red-50/40 p-6 shadow-sm">
           <h2 className="text-lg font-bold text-red-700">Reset progress</h2>
-          <p className="mt-2 text-sm text-zinc-600">This permanently deletes all your answers, notes, flags and saved sets. This can&apos;t be undone.</p>
+          <p className="mt-2 text-sm text-zinc-600">Choose what to wipe. This can&apos;t be undone.</p>
+
           {resetMsg && !resetErr ? (
             <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{resetMsg}</p>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
-              <p className="text-sm font-semibold text-zinc-600">Type <span className="rounded bg-white px-1.5 py-0.5 font-mono text-red-600">RESET</span> to confirm:</p>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-red-100 bg-white px-4 py-3">
+                <input type="checkbox" checked={wipeAnswers} onChange={(e) => setWipeAnswers(e.target.checked)} className="h-5 w-5 accent-red-500" />
+                <span className="text-sm font-semibold text-zinc-700">Questions &amp; heatmap <span className="font-normal text-zinc-400">(answers, flags, accuracy, activity)</span></span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-red-100 bg-white px-4 py-3">
+                <input type="checkbox" checked={wipeNotes} onChange={(e) => setWipeNotes(e.target.checked)} className="h-5 w-5 accent-red-500" />
+                <span className="text-sm font-semibold text-zinc-700">Notes</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-red-100 bg-white px-4 py-3">
+                <input type="checkbox" checked={wipeSets} onChange={(e) => setWipeSets(e.target.checked)} className="h-5 w-5 accent-red-500" />
+                <span className="text-sm font-semibold text-zinc-700">Saved sets</span>
+              </label>
+
+              <p className="mt-2 text-sm font-semibold text-zinc-600">Type <span className="rounded bg-white px-1.5 py-0.5 font-mono text-red-600">RESET</span> to confirm:</p>
               <input type="text" value={resetText} onChange={(e) => setResetText(e.target.value)} placeholder="RESET" className="rounded-xl border border-red-200 px-4 py-3 text-zinc-900 outline-none focus:border-red-400" />
-              <button onClick={resetProgress} disabled={busy || resetText !== "RESET"} className="rounded-full bg-red-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-zinc-300">{busy ? "Resetting…" : "Reset all my progress"}</button>
+              <button onClick={resetProgress} disabled={busy || resetText !== "RESET"} className="rounded-full bg-red-600 px-6 py-2.5 font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-zinc-300">{busy ? "Resetting…" : "Reset selected"}</button>
               {resetMsg && resetErr && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">{resetMsg}</p>}
             </div>
           )}

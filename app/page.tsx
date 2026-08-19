@@ -12,9 +12,11 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [confirmAge, setConfirmAge] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -27,10 +29,20 @@ export default function Home() {
     setIsError(error);
   }
 
+  async function forgotPassword() {
+    if (!email) { showMessage("Enter your email above first, then click reset.", true); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/update-password",
+    });
+    if (error) showMessage(error.message, true);
+    else { setResetMsg("Check your email for a reset link."); setMessage(""); }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage("");
+    setResetMsg("");
 
     if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({
@@ -42,6 +54,7 @@ export default function Home() {
             school: school,
             agreed_terms_at: new Date().toISOString(),
             confirmed_age_16: true,
+            marketing_opt_in: marketingOptIn,
           },
         },
       });
@@ -62,6 +75,10 @@ export default function Home() {
         showMessage("You already have an account — log in below.", true);
         setLoading(false);
         return;
+      }
+
+      if (marketingOptIn) {
+        await supabase.from("mailing_list").insert({ email: email.toLowerCase().trim() });
       }
 
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
@@ -97,15 +114,13 @@ export default function Home() {
   const canSubmit =
     email &&
     password &&
-    (mode === "login" || (firstName && school && agreeTerms && confirmAge));
-
-  return (
+    (mode === "login" || (firstName && school && agreeTerms && confirmAge));return (
     <main className="mx-auto max-w-5xl px-6 py-16">
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
         <div>
-          <div className="flex items-center gap-3">
-            <img src="/ALQB%20logo.png" alt="ALQB logo" className="h-16 w-auto" />
-            <span className="text-5xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
+          <div className="flex flex-col items-start gap-4">
+            <img src="/ALQB%20logo.png" alt="ALQB logo" className="h-40 w-auto mix-blend-multiply" />
+            <span className="text-6xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
           </div>
           <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
             Master A-Level Biology &amp; Chemistry.
@@ -117,10 +132,10 @@ export default function Home() {
 
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 shadow-lg shadow-emerald-700/5">
           <div className="flex rounded-full bg-emerald-50 p-1">
-            <button type="button" onClick={() => { setMode("signup"); setMessage(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "signup" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
+            <button type="button" onClick={() => { setMode("signup"); setMessage(""); setResetMsg(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "signup" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
               Create Account
             </button>
-            <button type="button" onClick={() => { setMode("login"); setMessage(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "login" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
+            <button type="button" onClick={() => { setMode("login"); setMessage(""); setResetMsg(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "login" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
               Log In
             </button>
           </div>
@@ -137,6 +152,14 @@ export default function Home() {
               <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
             </div>
 
+            {mode === "login" && (
+              <div className="mt-2 text-right">
+                <button type="button" onClick={forgotPassword} className="text-sm font-semibold text-emerald-700 hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
             {mode === "signup" && (
               <div className="mt-5 flex flex-col gap-3">
                 <label className="flex cursor-pointer items-start gap-3">
@@ -152,6 +175,10 @@ export default function Home() {
                     <Link href="/privacy" target="_blank" className="font-bold text-emerald-700 hover:underline">Privacy Policy</Link>.
                   </span>
                 </label>
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />
+                  <span className="text-sm text-zinc-600">Sign me up to receive updates, marketing and invites to webinars.</span>
+                </label>
               </div>
             )}
 
@@ -161,9 +188,10 @@ export default function Home() {
           </form>
 
           {message && (
-            <p className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
-              {message}
-            </p>
+            <p className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{message}</p>
+          )}
+          {resetMsg && (
+            <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{resetMsg}</p>
           )}
         </div>
       </div>
@@ -187,6 +215,9 @@ export default function Home() {
       </div>
 
       <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-500">
+        <Link href="/about" className="hover:text-emerald-700">About us</Link>
+        <Link href="/contact" className="hover:text-emerald-700">Contact us</Link>
+        <Link href="/tutorials" className="hover:text-emerald-700">Tutorials</Link>
         <Link href="/terms" className="hover:text-emerald-700">Terms of Use</Link>
         <Link href="/privacy" className="hover:text-emerald-700">Privacy Policy</Link>
       </div>
