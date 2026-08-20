@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { FREE_PLAN_IDS } from "@/app/lib/plans";
+import { plansForUser } from "@/app/lib/access";
 
-type QRow = { id: number; topic: string | null; module: string | null };
-type TopicInfo = { topic: string; count: number; done: number; pct: number | null };
+type QRow = { id: number; topic: string | null; module: string | null; spec_code: string | null; exam_board: string | null };
+type TopicInfo = { topic: string; label: string; count: number; done: number; pct: number | null };
 type ModuleGroup = { module: string; title: string; topics: TopicInfo[]; count: number; done: number };
 
 const MODULE_TITLES: Record<string, string> = {
@@ -52,7 +54,7 @@ export default function StudyPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: qData } = await supabase.from("questions").select("id, topic, module");
+      const { data: qData } = await supabase.from("questions").select("id, topic, module, spec_code, exam_board");
       if (qData) {
         setRows(qData as QRow[]);
         const allTopics = Array.from(new Set((qData as QRow[]).map((r) => r.topic || "Other")));
@@ -89,6 +91,16 @@ export default function StudyPage() {
     load();
   }, []);
 
+  // spec code lookup per topic (from the questions themselves)
+  const specByTopic: Record<string, string> = {};
+  rows.forEach((r) => {
+    const t = r.topic || "Other";
+    if (r.spec_code && !specByTopic[t]) specByTopic[t] = r.spec_code;
+  });
+  function labelFor(topic: string) {
+    return specByTopic[topic] ? `${specByTopic[topic]} ${topic}` : topic;
+  }
+
   const groups: ModuleGroup[] = [];
   const moduleOrder: string[] = [];
   const byModule: Record<string, Record<string, TopicInfo>> = {};
@@ -96,16 +108,15 @@ export default function StudyPage() {
     const m = r.module || "Other";
     const t = r.topic || "Other";
     if (!byModule[m]) { byModule[m] = {}; moduleOrder.push(m); }
-    if (!byModule[m][t]) byModule[m][t] = { topic: t, count: 0, done: 0, pct: topicPct[t] ?? null };
+    if (!byModule[m][t]) byModule[m][t] = { topic: t, label: labelFor(t), count: 0, done: 0, pct: topicPct[t] ?? null };
     byModule[m][t].count += 1;
     if (answeredIds.has(r.id)) byModule[m][t].done += 1;
   });
   moduleOrder.sort();
   moduleOrder.forEach((m) => {
     let topics = Object.values(byModule[m]);
-    if (weakestFirst) {
-      topics = [...topics].sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
-    }
+    if (weakestFirst) topics = [...topics].sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+    else topics = [...topics].sort((a, b) => a.label.localeCompare(b.label));
     groups.push({
       module: m,
       title: MODULE_TITLES[m] || m,
@@ -142,39 +153,28 @@ export default function StudyPage() {
     if (yields.length > 0) params.set("yields", yields.join("~~"));
     if (statuses.length > 0) params.set("statuses", statuses.join("~~"));
     if (spacedRep) params.set("spaced", "1");
-    if (challenge) {
-      params.set("challenge", String(challengeMins));
-    } else {
-      params.set("limit", String(Math.min(amount, maxAmount)));
-    }
+    if (challenge) params.set("challenge", String(challengeMins));
+    else params.set("limit", String(Math.min(amount, maxAmount)));
     router.push("/question?" + params.toString());
   }
 
   if (loading)
-    return <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6"><p className="text-zinc-400">Loading…</p></main>;return (
+    return <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6"><p className="text-zinc-400">Loading…</p></main>;
+  return (
     <main className="mx-auto max-w-4xl px-6 py-10 pb-32">
       {hasAnswers && (
         <div className="mb-8 grid gap-4 sm:grid-cols-3">
           <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
             <span className="text-2xl">📈</span>
-            <div>
-              <p className="text-2xl font-extrabold text-zinc-900">{attemptedPct}%</p>
-              <p className="text-xs font-semibold text-zinc-500">of questions attempted</p>
-            </div>
+            <div><p className="text-2xl font-extrabold text-zinc-900">{attemptedPct}%</p><p className="text-xs font-semibold text-zinc-500">of questions attempted</p></div>
           </div>
           <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
             <span className="text-2xl">📅</span>
-            <div>
-              <p className="text-2xl font-extrabold text-zinc-900">{daysStudied}</p>
-              <p className="text-xs font-semibold text-zinc-500">day{daysStudied === 1 ? "" : "s"} studied</p>
-            </div>
+            <div><p className="text-2xl font-extrabold text-zinc-900">{daysStudied}</p><p className="text-xs font-semibold text-zinc-500">day{daysStudied === 1 ? "" : "s"} studied</p></div>
           </div>
           <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-white px-6 py-4 shadow-sm">
             <span className="text-2xl">🎯</span>
-            <div>
-              <p className="text-2xl font-extrabold text-emerald-700">{accuracy}%</p>
-              <p className="text-xs font-semibold text-zinc-500">overall accuracy</p>
-            </div>
+            <div><p className="text-2xl font-extrabold text-emerald-700">{accuracy}%</p><p className="text-xs font-semibold text-zinc-500">overall accuracy</p></div>
           </div>
         </div>
       )}
@@ -223,11 +223,9 @@ export default function StudyPage() {
                         <button key={t.topic} onClick={() => toggleTopic(t.topic)} className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${isOn ? "border-emerald-500 bg-emerald-50" : "border-zinc-200 bg-white hover:border-emerald-300"}`}>
                           <div className="flex items-center gap-3">
                             <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-xs font-bold ${isOn ? "border-emerald-600 bg-emerald-600 text-white" : "border-zinc-300 text-transparent"}`}>✓</span>
-                            <span className="font-semibold text-zinc-800">{t.topic}</span>
+                            <span className="font-semibold text-zinc-800">{t.label}</span>
                             {t.pct !== null && (
-                              <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-bold ${t.pct >= 70 ? "bg-emerald-50 text-emerald-700" : t.pct >= 40 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>
-                                {t.pct}%
-                              </span>
+                              <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-bold ${t.pct >= 70 ? "bg-emerald-50 text-emerald-700" : t.pct >= 40 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-600"}`}>{t.pct}%</span>
                             )}
                           </div>
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
@@ -248,9 +246,7 @@ export default function StudyPage() {
       <div className="fixed inset-x-0 bottom-0 border-t border-emerald-100 bg-white/90 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
           <p className="font-semibold text-zinc-600">{selectedCount} questions selected</p>
-          <button onClick={() => setShowPopup(true)} disabled={selectedCount === 0} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
-            Start Session →
-          </button>
+          <button onClick={() => setShowPopup(true)} disabled={selectedCount === 0} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">Start Session →</button>
         </div>
       </div>
 
@@ -265,28 +261,20 @@ export default function StudyPage() {
             <div className="mt-6 flex flex-col gap-6">
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                 <label className="flex cursor-pointer items-center justify-between">
-                  <span>
-                    <span className="block font-bold text-zinc-900">🎯 Focus on my weak topics</span>
-                    <span className="block text-xs text-zinc-500">Show more questions from topics you score lowest in.</span>
-                  </span>
+                  <span><span className="block text-sm font-bold text-zinc-900">🎯 Focus on my weak topics</span><span className="block text-xs text-zinc-500">Show more questions from topics you score lowest in.</span></span>
                   <input type="checkbox" checked={spacedRep} onChange={(e) => setSpacedRep(e.target.checked)} className="h-6 w-6 accent-emerald-600" />
                 </label>
               </div>
 
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                 <label className="flex cursor-pointer items-center justify-between">
-                  <span>
-                    <span className="block font-bold text-zinc-900">⏱️ Timed challenge</span>
-                    <span className="block text-xs text-zinc-500">Answer as many as you can before time runs out.</span>
-                  </span>
+                  <span><span className="block text-sm font-bold text-zinc-900">⏱️ Timed challenge</span><span className="block text-xs text-zinc-500">Answer as many as you can before time runs out.</span></span>
                   <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} className="h-6 w-6 accent-emerald-600" />
                 </label>
                 {challenge && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {CHALLENGE_MINUTES.map((m) => (
-                      <button key={m} onClick={() => setChallengeMins(m)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${challengeMins === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                        {m} min
-                      </button>
+                      <button key={m} onClick={() => setChallengeMins(m)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${challengeMins === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{m} min</button>
                     ))}
                   </div>
                 )}
@@ -295,14 +283,12 @@ export default function StudyPage() {
               {!challenge && (
                 <div>
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
-                    <input type="number" min={1} max={maxAmount} value={amount} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), maxAmount)); }} className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center font-bold text-emerald-700 outline-none focus:border-emerald-400" />
+                    <p className="text-sm font-bold uppercase tracking-wide text-zinc-400">Number of questions</p>
+                    <input type="number" min={1} max={maxAmount} value={amount} onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setAmount(Math.min(Math.max(v, 1), maxAmount)); }} className="w-20 rounded-xl border border-zinc-200 px-3 py-1.5 text-center text-sm font-bold text-emerald-700 outline-none focus:border-emerald-400" />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {COUNT_PRESETS.map((n) => (
-                      <button key={n} onClick={() => setAmount(Math.min(n, maxAmount))} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === Math.min(n, maxAmount) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-                        {n}
-                      </button>
+                      <button key={n} onClick={() => setAmount(Math.min(n, maxAmount))} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === Math.min(n, maxAmount) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{n}</button>
                     ))}
                     <button onClick={() => setAmount(maxAmount)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${amount === maxAmount ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   </div>
@@ -312,7 +298,7 @@ export default function StudyPage() {
               )}
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-zinc-400">Difficulty</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button onClick={() => setDifficulties([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${difficulties.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   {DIFFICULTIES.map((d) => (
@@ -322,7 +308,7 @@ export default function StudyPage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Yield</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-zinc-400">Yield</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button onClick={() => setYields([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${yields.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   {YIELDS.map((y) => (
@@ -332,9 +318,9 @@ export default function StudyPage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Question status</p>
-                <p className="mt-0.5 text-xs text-zinc-400">Select none for all</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-zinc-400">Question status</p>
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={() => setStatuses([])} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${statuses.length === 0 ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>All</button>
                   {STATUSES.map((s) => (
                     <button key={s.value} onClick={() => toggleIn(statuses, setStatuses, s.value)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${statuses.includes(s.value) ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{s.label}</button>
                   ))}
@@ -344,9 +330,7 @@ export default function StudyPage() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button onClick={() => setShowPopup(false)} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">Back</button>
-              <button onClick={launchSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-                {challenge ? `Start ${challengeMins}-min challenge →` : "Start Session →"}
-              </button>
+              <button onClick={launchSession} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">{challenge ? `Start ${challengeMins}-min challenge →` : "Start Session →"}</button>
             </div>
           </div>
         </div>

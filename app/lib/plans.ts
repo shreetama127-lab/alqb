@@ -23,7 +23,7 @@ export const PRICE_OPTIONS: PriceOption[] = [
 
 export const PLANS: Plan[] = [
   { id: "ocr-biology", qualification: "A-Level", subject: "Biology", variant: "OCR", title: "OCR A-Level Biology", emoji: "🧬", live: true },
-  { id: "aqa-biology", qualification: "A-Level", subject: "Biology", variant: "AQA", title: "AQA A-Level Biology", emoji: "🌿", live: false },
+  { id: "aqa-biology", qualification: "A-Level", subject: "Biology", variant: "AQA", title: "AQA A-Level Biology", emoji: "🌿", live: true },
   { id: "ocr-chemistry", qualification: "A-Level", subject: "Chemistry", variant: "OCR", title: "OCR A-Level Chemistry", emoji: "🧪", live: false },
   { id: "aqa-chemistry", qualification: "A-Level", subject: "Chemistry", variant: "AQA", title: "AQA A-Level Chemistry", emoji: "⚗️", live: false },
   { id: "ib-biology-sl", qualification: "IB", subject: "Biology", variant: "Standard Level", title: "IB Biology (SL)", emoji: "🌍", live: false },
