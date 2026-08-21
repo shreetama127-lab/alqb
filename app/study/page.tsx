@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { FREE_PLAN_IDS } from "@/app/lib/plans";
-import { plansForUser } from "@/app/lib/access";
 
 type QRow = { id: number; topic: string | null; module: string | null; spec_code: string | null; exam_board: string | null };
 type TopicInfo = { topic: string; label: string; count: number; done: number; pct: number | null };
