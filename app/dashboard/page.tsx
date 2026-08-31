@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("there");
   const [streak, setStreak] = useState(0);
-  const [questionCount, setQuestionCount] = useState<number | null>(null);
+  const [countsByBoard, setCountsByBoard] = useState<Record<string, number>>({});
   const [noteCount, setNoteCount] = useState(0);
   const [setCount, setSetCount] = useState(0);
   const [activeIds, setActiveIds] = useState<string[]>([]);
@@ -30,8 +30,15 @@ export default function DashboardPage() {
       setUserId(userData.user.id);
       setFirstName(userData.user.user_metadata?.first_name || "there");
 
-      const { count } = await supabase.from("questions").select("id", { count: "exact", head: true });
-      if (count) setQuestionCount(count);
+      const boards = Array.from(new Set(PLANS.map((p) => p.variant)));
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        boards.map(async (board) => {
+          const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("exam_board", board);
+          counts[board] = count || 0;
+        })
+      );
+      setCountsByBoard(counts);
 
       const { count: nCount } = await supabase.from("notes").select("question_id", { count: "exact", head: true }).eq("user_id", userData.user.id);
       if (nCount) setNoteCount(nCount);
@@ -93,7 +100,9 @@ export default function DashboardPage() {
         <p className="text-lg text-zinc-600">Please log in to see your dashboard.</p>
         <Link href="/login" className="rounded-full bg-emerald-700 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">Log In</Link>
       </main>
-    );const days = examDate ? daysUntil(examDate) : null;
+    );
+
+  const days = examDate ? daysUntil(examDate) : null;
   const prettyDate = examDate ? new Date(examDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
   const myPlans = PLANS.filter((p) => activeIds.includes(p.id));
 
@@ -130,7 +139,7 @@ export default function DashboardPage() {
           </Link>
 
           <button onClick={() => setShowExamModal(true)} className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-6 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-            <span className="text-3xl">📆</span>
+            <span className="text-3xl">📅</span>
             {days !== null ? (
               <>
                 <span className="mt-1 text-2xl font-extrabold leading-tight text-emerald-700">{days > 0 ? days : days === 0 ? "Today" : "—"}</span>
@@ -153,14 +162,17 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
-        {myPlans.map((plan) => (
-          <Link key={plan.id} href="/study" className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg">
-            <p className="text-4xl">{plan.emoji}</p>
-            <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">{plan.title}</h3>
-            <p className="mt-1 text-sm font-semibold text-zinc-500">{questionCount ? `${questionCount} questions` : "Question bank"}</p>
-            <p className="mt-4 text-sm font-bold text-emerald-700">Start studying →</p>
-          </Link>
-        ))}
+        {myPlans.map((plan) => {
+          const qCount = countsByBoard[plan.variant] ?? 0;
+          return (
+            <Link key={plan.id} href="/study" className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg">
+              <p className="text-4xl">{plan.emoji}</p>
+              <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">{plan.title}</h3>
+              <p className="mt-1 text-sm font-semibold text-zinc-500">{qCount > 0 ? `${qCount} question${qCount === 1 ? "" : "s"}` : "Coming soon"}</p>
+              <p className="mt-4 text-sm font-bold text-emerald-700">Start studying →</p>
+            </Link>
+          );
+        })}
         <Link href="/subscriptions" className="group flex flex-col justify-center rounded-3xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-7 text-center transition-all hover:-translate-y-1 hover:border-emerald-400">
           <p className="text-4xl">➕</p>
           <h3 className="mt-4 text-xl font-extrabold text-emerald-700">Add a question bank</h3>
