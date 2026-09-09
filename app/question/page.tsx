@@ -11,6 +11,7 @@ type Question = {
   id: number;
   question_ref?: string | null;
   exam_board?: string | null;
+  spec_code?: string | null;
   stem: string;
   topic?: string;
   key_takeaway?: string | null;
@@ -54,10 +55,15 @@ function refCode(q: Question) {
   return q.question_ref ? `${board} ${q.question_ref}` : `${board} ${q.id}`;
 }
 
+function topicLabel(q: Question) {
+  if (!q.topic) return "";
+  return q.spec_code ? `${q.spec_code} ${q.topic}` : q.topic;
+}
+
 function ExplanationText({ text }: { text: string }) {
   const paras = paragraphs(text);
   return (
-    <div className="mt-2 flex flex-col gap-2 text-sm text-zinc-700">
+    <div className="mt-2 flex flex-col gap-2 text-base text-zinc-700">
       {paras.map((p, i) => (<p key={i}>{p}</p>))}
     </div>
   );
@@ -73,7 +79,7 @@ function TakeawayText({ text }: { text: string }) {
         return isHeading ? (
           <p key={i} className="mt-2 text-xs font-bold uppercase tracking-wide text-indigo-700">{line}</p>
         ) : (
-          <p key={i} className="text-sm leading-relaxed text-zinc-700">{line}</p>
+          <p key={i} className="text-base leading-relaxed text-zinc-700">{line}</p>
         );
       })}
     </div>
@@ -96,9 +102,11 @@ export default function QuestionPage() {
   const [feedback, setFeedback] = useState<Record<number, "up" | "down">>({});
   const [openExplain, setOpenExplain] = useState<Record<string, boolean>>({});
   const [stats, setStats] = useState<Record<number, { total: number; correct: number }>>({});
+  const [picks, setPicks] = useState<Record<number, Record<string, number>>>({});
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [noteSaved, setNoteSaved] = useState(false);
-  const [showScore, setShowScore] = useState(true);
+  const [showPanel, setShowPanel] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
   const [showNotesReview, setShowNotesReview] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finalTime, setFinalTime] = useState(0);
@@ -127,7 +135,7 @@ export default function QuestionPage() {
 
       let query = supabase
         .from("questions")
-        .select("id, question_ref, exam_board, stem, topic, key_takeaway, options, resources");
+        .select("id, question_ref, exam_board, spec_code, stem, topic, key_takeaway, options, resources");
       if (chosenTopics.length > 0) query = query.in("topic", chosenTopics);
       if (chosenModules.length > 0) query = query.in("module", chosenModules);
       if (chosenDiffs.length > 0) query = query.in("difficulty", chosenDiffs);
@@ -168,10 +176,7 @@ export default function QuestionPage() {
           const { data: accData } = await supabase.rpc("topic_accuracy");
           const pctByTopic: Record<string, number> = {};
           (accData || []).forEach((t: { topic: string; pct: number }) => { pctByTopic[t.topic] = Number(t.pct); });
-          list = list.map((q) => ({
-            ...q,
-            options: shuffle(q.options).map((opt, i) => ({ ...opt, letter: LETTERS[i] || opt.letter })),
-          }));
+          list = list.map((q) => ({ ...q, options: shuffle(q.options).map((opt, i) => ({ ...opt, letter: LETTERS[i] || opt.letter })) }));
           list = [...list].sort((a, b) => {
             const wa = 100 - (pctByTopic[a.topic || ""] ?? 50) + Math.random() * 40;
             const wb = 100 - (pctByTopic[b.topic || ""] ?? 50) + Math.random() * 40;
@@ -186,12 +191,7 @@ export default function QuestionPage() {
 
       if (challengeParam) {
         const mins = parseInt(challengeParam, 10);
-        if (!isNaN(mins)) {
-          setIsChallenge(true);
-          setMinutes(mins);
-          setTimed(true);
-          setElapsed(0);
-        }
+        if (!isNaN(mins)) { setIsChallenge(true); setMinutes(mins); setTimed(true); setElapsed(0); setShowTimer(true); }
       } else {
         const limit = limitParam ? parseInt(limitParam, 10) : 0;
         if (limit > 0) list = list.slice(0, limit);
@@ -202,16 +202,12 @@ export default function QuestionPage() {
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user && list.length > 0) {
         const ids = list.map((q) => q.id);
-        const { data: noteRows } = await supabase
-          .from("notes").select("question_id, content")
-          .eq("user_id", userData.user.id).in("question_id", ids);
+        const { data: noteRows } = await supabase.from("notes").select("question_id, content").eq("user_id", userData.user.id).in("question_id", ids);
         const map: Record<number, string> = {};
         (noteRows || []).forEach((n) => { map[n.question_id] = n.content || ""; });
         setNotes(map);
 
-        const { data: rateRows } = await supabase
-          .from("question_ratings").select("question_id, rating")
-          .eq("user_id", userData.user.id).in("question_id", ids);
+        const { data: rateRows } = await supabase.from("question_ratings").select("question_id, rating").eq("user_id", userData.user.id).in("question_id", ids);
         const fmap: Record<number, "up" | "down"> = {};
         (rateRows || []).forEach((r) => { fmap[r.question_id] = r.rating === 1 ? "up" : "down"; });
         setFeedback(fmap);
@@ -228,9 +224,7 @@ export default function QuestionPage() {
   }, [timed, paused]);
 
   useEffect(() => {
-    function handleVisibility() {
-      if (!document.hidden) setPaused(false);
-    }
+    function handleVisibility() { if (!document.hidden) setPaused(false); }
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
@@ -249,19 +243,13 @@ export default function QuestionPage() {
   }
 
   if (loading)
-    return (
-      <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6">
-        <p className="text-zinc-400">Loading questions…</p>
-      </main>
-    );
+    return <main className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-6"><p className="text-zinc-400">Loading questions…</p></main>;
 
   if (questions.length === 0)
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-2xl flex-col items-center justify-center gap-5 px-6 text-center">
         <p className="text-zinc-400">No questions match these filters.</p>
-        <Link href="/study" className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-          ← Change filters
-        </Link>
+        <Link href="/study" className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">← Change filters</Link>
       </main>
     );
 
@@ -272,6 +260,7 @@ export default function QuestionPage() {
   const isFlagged = !!flagged[q.id];
   const thisFeedback = feedback[q.id];
   const thisStats = stats[q.id];
+  const thisPicks = picks[q.id];
   const thisNote = notes[q.id] || "";
   const showResources = submitted && q.resources && q.resources.length > 0;
   const showTakeaway = submitted && q.key_takeaway && q.key_takeaway.trim().length > 0;
@@ -280,21 +269,18 @@ export default function QuestionPage() {
   const correctCount = Object.values(answers).filter((a) => a.correct).length;
   const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
   const progress = Math.round(((index + 1) / questions.length) * 100);
+  const deckCorrectPct = Math.round((correctCount / questions.length) * 100);
 
   const totalTime = minutes * 60;
   const remaining = totalTime - elapsed;
   const timeUp = timed && remaining <= 0;
   const showTimeUpPopup = timeUp && !dismissedTimeUp && !finished;
 
-  const notesList = questions
-    .filter((qq) => (notes[qq.id] || "").trim().length > 0)
-    .map((qq) => ({ stem: qq.stem, topic: qq.topic, content: notes[qq.id] }));
+  const notesList = questions.filter((qq) => (notes[qq.id] || "").trim().length > 0).map((qq) => ({ stem: qq.stem, topic: qq.topic, content: notes[qq.id] }));
 
-  function endSession() {
-    setFinalTime(elapsed);
-    setFinished(true);
-    saveSet(answers);
-  }
+  const totalPicks = thisPicks ? Object.values(thisPicks).reduce((s, n) => s + n, 0) : 0;
+
+  function endSession() { setFinalTime(elapsed); setFinished(true); saveSet(answers); }
 
   if (finished) {
     const byTopic: Record<string, { answered: number; correct: number }> = {};
@@ -304,12 +290,10 @@ export default function QuestionPage() {
       byTopic[t].answered += 1;
       if (a.correct) byTopic[t].correct += 1;
     });
-    const topicList = Object.entries(byTopic)
-      .map(([topic, v]) => ({ topic, ...v, pct: Math.round((v.correct / v.answered) * 100) }))
-      .sort((a, b) => a.pct - b.pct);
+    const topicList = Object.entries(byTopic).map(([topic, v]) => ({ topic, ...v, pct: Math.round((v.correct / v.answered) * 100) })).sort((a, b) => a.pct - b.pct);
 
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
+      <main className="mx-auto max-w-2xl px-5 py-12 sm:px-6 sm:py-16">
         {showNotesReview && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
             <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl">
@@ -334,34 +318,20 @@ export default function QuestionPage() {
           </div>
         )}
 
-        <div className="rounded-3xl border border-emerald-100 bg-white p-10 text-center shadow-sm">
+        <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm sm:p-10">
           <p className="text-5xl">{accuracy >= 70 ? "🎉" : accuracy >= 40 ? "💪" : "📚"}</p>
           <h1 className="mt-4 text-3xl font-extrabold text-zinc-900">{isChallenge ? "Challenge complete!" : "Session complete!"}</h1>
           <p className="mt-2 text-zinc-600">Here&apos;s how you did.</p>
 
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-2xl bg-emerald-50 p-4">
-              <p className="text-3xl font-extrabold text-emerald-700">{correctCount}</p>
-              <p className="text-xs font-semibold text-emerald-700/70">Correct</p>
-            </div>
-            <div className="rounded-2xl bg-red-50 p-4">
-              <p className="text-3xl font-extrabold text-red-500">{answeredCount - correctCount}</p>
-              <p className="text-xs font-semibold text-red-500/70">Incorrect</p>
-            </div>
-            <div className="rounded-2xl bg-emerald-50 p-4">
-              <p className="text-3xl font-extrabold text-emerald-700">{accuracy}%</p>
-              <p className="text-xs font-semibold text-emerald-700/70">Accuracy</p>
-            </div>
-            <div className="rounded-2xl bg-zinc-50 p-4">
-              <p className="text-3xl font-extrabold text-zinc-700">{finalTime > 0 ? fmt(finalTime) : "—"}</p>
-              <p className="text-xs font-semibold text-zinc-500">Time taken</p>
-            </div>
+            <div className="rounded-2xl bg-emerald-50 p-4"><p className="text-3xl font-extrabold text-emerald-700">{correctCount}</p><p className="text-xs font-semibold text-emerald-700/70">Correct</p></div>
+            <div className="rounded-2xl bg-red-50 p-4"><p className="text-3xl font-extrabold text-red-500">{answeredCount - correctCount}</p><p className="text-xs font-semibold text-red-500/70">Incorrect</p></div>
+            <div className="rounded-2xl bg-emerald-50 p-4"><p className="text-3xl font-extrabold text-emerald-700">{accuracy}%</p><p className="text-xs font-semibold text-emerald-700/70">Accuracy</p></div>
+            <div className="rounded-2xl bg-zinc-50 p-4"><p className="text-3xl font-extrabold text-zinc-700">{finalTime > 0 ? fmt(finalTime) : "—"}</p><p className="text-xs font-semibold text-zinc-500">Time taken</p></div>
           </div>
 
           {isChallenge && (
-            <p className="mt-6 rounded-2xl bg-indigo-50 px-4 py-3 font-bold text-indigo-800">
-              ⏱️ You answered {answeredCount} question{answeredCount === 1 ? "" : "s"} in {minutes} minutes!
-            </p>
+            <p className="mt-6 rounded-2xl bg-indigo-50 px-4 py-3 font-bold text-indigo-800">⏱️ You answered {answeredCount} question{answeredCount === 1 ? "" : "s"} in {minutes} minutes!</p>
           )}
 
           {topicList.length > 0 && (
@@ -374,9 +344,7 @@ export default function QuestionPage() {
                     <div key={t.topic}>
                       <div className="flex items-center justify-between text-sm">
                         <span className="font-semibold text-zinc-700">{t.topic}</span>
-                        <span className="font-bold" style={{ color: colour }}>
-                          {t.pct}% <span className="font-normal text-zinc-400">({t.correct}/{t.answered})</span>
-                        </span>
+                        <span className="font-bold" style={{ color: colour }}>{t.pct}% <span className="font-normal text-zinc-400">({t.correct}/{t.answered})</span></span>
                       </div>
                       <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-100">
                         <div className="h-full rounded-full" style={{ width: `${t.pct}%`, backgroundColor: colour }} />
@@ -389,9 +357,7 @@ export default function QuestionPage() {
           )}
 
           {notesList.length > 0 && (
-            <button onClick={() => setShowNotesReview(true)} className="mt-8 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-4 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-              📝 Review all notes ({notesList.length})
-            </button>
+            <button onClick={() => setShowNotesReview(true)} className="mt-8 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-4 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">📝 Review all notes ({notesList.length})</button>
           )}
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -402,7 +368,8 @@ export default function QuestionPage() {
         </div>
       </main>
     );
-  }function stopTimed() { setTimed(false); setPaused(false); setElapsed(0); }
+  }
+  function stopTimed() { setTimed(false); setPaused(false); setElapsed(0); }
   function chooseOption(letter: string) { if (!submitted) setPending(letter); }
 
   function onNoteChange(text: string) {
@@ -413,18 +380,22 @@ export default function QuestionPage() {
     saveTimer.current = setTimeout(async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      await supabase.from("notes").upsert({
-        user_id: userData.user.id, question_id: qid, content: text, updated_at: new Date().toISOString(),
-      });
+      await supabase.from("notes").upsert({ user_id: userData.user.id, question_id: qid, content: text, updated_at: new Date().toISOString() });
       setNoteSaved(true);
     }, 800);
   }
 
   async function loadStats(questionId: number) {
-    const { data, error } = await supabase.rpc("question_correct_pct", { qid: questionId });
-    if (error) { console.error("Error loading question stats:", error); return; }
+    const { data } = await supabase.rpc("question_correct_pct", { qid: questionId });
     const row = Array.isArray(data) ? data[0] : data;
     if (row) setStats((s) => ({ ...s, [questionId]: { total: Number(row.total), correct: Number(row.correct) } }));
+
+    const { data: pickData } = await supabase.rpc("option_pick_pct", { qid: questionId });
+    if (pickData) {
+      const map: Record<string, number> = {};
+      (pickData as { choice: string; picks: number }[]).forEach((p) => { map[p.choice] = Number(p.picks); });
+      setPicks((s) => ({ ...s, [questionId]: map }));
+    }
   }
 
   async function submitAnswer() {
@@ -435,82 +406,53 @@ export default function QuestionPage() {
     setAnswers(updated);
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
-      const { error } = await supabase.from("answers").insert({
-        user_id: userData.user.id, question_id: q.id, is_correct: isCorrect,
-      });
+      const { error } = await supabase.from("answers").insert({ user_id: userData.user.id, question_id: q.id, is_correct: isCorrect });
       if (error) console.error("Error saving answer:", error);
-
-      // record which option was chosen (for per-option % stats)
       const chosenText = chosen ? chosen.text : pending;
-      await supabase.from("question_picks").insert({
-        question_id: q.id,
-        user_id: userData.user.id,
-        choice: chosenText,
-      });
+      await supabase.from("question_picks").insert({ question_id: q.id, user_id: userData.user.id, choice: chosenText });
     }
     await loadStats(q.id);
-    if (Object.keys(updated).length === questions.length) {
-      setFinalTime(elapsed);
-      setFinished(true);
-      saveSet(updated);
-    }
+    if (Object.keys(updated).length === questions.length) { setFinalTime(elapsed); setFinished(true); saveSet(updated); }
   }
 
   async function flagQuestion() {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) { alert("Please log in to flag a question."); return; }
     const { error } = await supabase.from("flags").insert({ user_id: userData.user.id, question_id: q.id });
-    if (error) console.error("Error flagging:", error);
-    else setFlagged((f) => ({ ...f, [q.id]: true }));
+    if (!error) setFlagged((f) => ({ ...f, [q.id]: true }));
   }
 
   async function giveFeedback(kind: "up" | "down") {
     setFeedback((f) => ({ ...f, [q.id]: kind }));
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
-    await supabase.from("question_ratings").upsert({
-      question_id: q.id,
-      user_id: userData.user.id,
-      rating: kind === "up" ? 1 : -1,
-    });
+    await supabase.from("question_ratings").upsert({ question_id: q.id, user_id: userData.user.id, rating: kind === "up" ? 1 : -1 });
   }
 
   async function submitReport() {
     if (!reportText.trim()) return;
     const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("question_reports").insert({
-      question_id: q.id,
-      user_id: userData.user?.id || null,
-      reason: reportText.trim(),
-    });
+    await supabase.from("question_reports").insert({ question_id: q.id, user_id: userData.user?.id || null, reason: reportText.trim() });
     setReportSent(true);
     setReportText("");
     setTimeout(() => { setReportOpen(false); setReportSent(false); }, 1500);
   }
 
-  function toggleExplain(letter: string) {
-    const key = q.id + "-" + letter;
-    setOpenExplain((o) => ({ ...o, [key]: !o[key] }));
-  }
-
+  function toggleExplain(letter: string) { const key = q.id + "-" + letter; setOpenExplain((o) => ({ ...o, [key]: !o[key] })); }
   function goToQuestion(i: number) { setIndex(i); setPending(null); setNoteSaved(false); }
   function prevQuestion() { if (index > 0) goToQuestion(index - 1); }
   function nextQuestion() { if (index + 1 < questions.length) goToQuestion(index + 1); else endSession(); }
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10 lg:flex-row">
+    <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-5 sm:px-6 sm:py-8 lg:flex-row">
       {showTimeUpPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
             <p className="text-5xl">⏰</p>
             <h2 className="mt-4 text-2xl font-extrabold text-zinc-900">Time&apos;s up!</h2>
-            <p className="mt-2 text-zinc-600">
-              You answered {answeredCount} of {questions.length} questions.{isChallenge ? " Great effort!" : " Keep going, or finish and see your results?"}
-            </p>
+            <p className="mt-2 text-zinc-600">You answered {answeredCount} of {questions.length} questions.{isChallenge ? " Great effort!" : " Keep going, or finish and see your results?"}</p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              {!isChallenge && (
-                <button onClick={() => setDismissedTimeUp(true)} className="rounded-full border-2 border-emerald-200 bg-white px-6 py-3 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">Keep going</button>
-              )}
+              {!isChallenge && <button onClick={() => setDismissedTimeUp(true)} className="rounded-full border-2 border-emerald-200 bg-white px-6 py-3 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">Keep going</button>}
               <button onClick={endSession} className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">See results</button>
             </div>
           </div>
@@ -538,72 +480,55 @@ export default function QuestionPage() {
       )}
 
       <div className="flex-1">
-        <div className="mb-5 flex items-center justify-between rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm">
-          {timed ? (
-            <>
-              <div className="text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Elapsed</p>
-                <p className="text-xl font-extrabold text-zinc-700">{fmt(elapsed)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setPaused((p) => !p)} className={`rounded-full px-5 py-1.5 text-sm font-bold transition-colors ${paused ? "bg-emerald-700 text-white hover:bg-emerald-800" : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>
-                  {paused ? "▶ Resume" : "⏸ Pause"}
-                </button>
-                {!isChallenge && (
-                  <button onClick={stopTimed} className="rounded-full border border-zinc-200 px-4 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">End timer</button>
-                )}
-              </div>
-              <div className="text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{timeUp ? "Overtime" : paused ? "Paused" : "Remaining"}</p>
-                <p className={`text-xl font-extrabold ${timeUp ? "text-amber-600" : remaining <= 60 ? "text-red-600" : "text-emerald-700"}`}>
-                  {timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-zinc-600">Set a time limit:</p>
-              <div className="flex items-center gap-2">
-                {[10, 20, 30, 45, 60].map((m) => (
-                  <button key={m} onClick={() => setMinutes(m)} className={`rounded-full px-3 py-1.5 text-sm font-bold transition-colors ${minutes === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}>{m}m</button>
-                ))}
-                <button onClick={() => { setElapsed(0); setPaused(false); setDismissedTimeUp(false); setTimed(true); }} className="ml-2 rounded-full bg-emerald-700 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800">Start</button>
-              </div>
-            </>
-          )}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-base font-bold uppercase tracking-wide text-emerald-700">Q{index + 1} of {questions.length}</p>
+          <div className="flex items-center gap-2">
+            {answeredCount > 0 && <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">{accuracy}%</span>}
+            {timed ? (
+              <span className={`rounded-full px-3 py-1 text-sm font-bold ${timeUp ? "bg-amber-100 text-amber-700" : remaining <= 60 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
+                {timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}
+              </span>
+            ) : (
+              <button onClick={() => setShowTimer((s) => !s)} className="rounded-full border border-emerald-200 px-3 py-1 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50">⏱ Timer</button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Question {index + 1} of {questions.length}</p>
-          {showScore && answeredCount > 0 && (
-            <p className="rounded-full bg-emerald-100 px-4 py-1 text-sm font-bold text-emerald-800">{correctCount}/{answeredCount} correct · {accuracy}%</p>
-          )}
-        </div>
-
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-100">
           <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Left / right nav, centered, high up */}
-        <div className="mt-5 flex items-center justify-center gap-4">
-          <button onClick={prevQuestion} disabled={index === 0} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-200 text-lg font-bold text-zinc-500 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" title="Previous question">←</button>
-          <span className="text-sm font-semibold text-zinc-400">{index + 1} / {questions.length}</span>
-          <button onClick={() => { if (index + 1 < questions.length) goToQuestion(index + 1); }} disabled={index + 1 >= questions.length} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-zinc-200 text-lg font-bold text-zinc-500 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40" title="Next question">→</button>
-        </div>
-
-        <div className="mt-5 rounded-3xl border border-emerald-100 bg-white p-8 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            {q.topic ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">{q.topic}</span>
-            ) : (<span />)}
-            <button onClick={flagQuestion} disabled={isFlagged} title="Flag this question for review"
-              className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>
-              {isFlagged ? "⚑ Flagged" : "⚑ Flag"}
-            </button>
+        {(showTimer || timed) && (
+          <div className="mt-3 flex items-center justify-between rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm">
+            {timed ? (
+              <>
+                <div className="text-center"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Elapsed</p><p className="text-lg font-extrabold text-zinc-700">{fmt(elapsed)}</p></div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setPaused((p) => !p)} className={`rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${paused ? "bg-emerald-700 text-white hover:bg-emerald-800" : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>{paused ? "▶ Resume" : "⏸ Pause"}</button>
+                  {!isChallenge && <button onClick={() => { stopTimed(); setShowTimer(false); }} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">End</button>}
+                </div>
+                <div className="text-center"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{timeUp ? "Overtime" : paused ? "Paused" : "Left"}</p><p className={`text-lg font-extrabold ${timeUp ? "text-amber-600" : remaining <= 60 ? "text-red-600" : "text-emerald-700"}`}>{timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}</p></div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-zinc-600">Time limit:</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[10, 20, 30, 45, 60].map((m) => (<button key={m} onClick={() => setMinutes(m)} className={`rounded-full px-2.5 py-1.5 text-sm font-bold transition-colors ${minutes === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}>{m}m</button>))}
+                  <button onClick={() => { setElapsed(0); setPaused(false); setDismissedTimeUp(false); setTimed(true); }} className="ml-1 rounded-full bg-emerald-700 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800">Start</button>
+                </div>
+              </>
+            )}
           </div>
-          <h2 className="text-2xl font-bold leading-snug text-zinc-900">{q.stem}</h2>
+        )}
 
-          <div className="mt-6 flex flex-col gap-3">
+        <div className="mt-4 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-7">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            {q.topic ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">{topicLabel(q)}</span> : <span />}
+            <button onClick={flagQuestion} disabled={isFlagged} title="Flag this question for review" className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>{isFlagged ? "⚑ Flagged" : "⚑ Flag"}</button>
+          </div>
+          <h2 className="text-2xl font-bold leading-snug text-zinc-900 sm:text-3xl">{q.stem}</h2>
+
+          <div className="mt-5 flex flex-col gap-3">
             {q.options.map((option) => {
               const isActive = activeChoice === option.letter;
               const isPicked = submitted && thisAnswer.selected === option.letter;
@@ -612,17 +537,20 @@ export default function QuestionPage() {
               if (submitted && option.correct) style = "border-emerald-500 bg-emerald-50";
               else if (submitted && isActive) style = "border-red-300 bg-red-50";
               else if (isActive) style = "border-emerald-500 bg-emerald-50";
+              const pickCount = thisPicks ? (thisPicks[option.text] || 0) : 0;
+              const pickPct = totalPicks >= 3 ? Math.round((pickCount / totalPicks) * 100) : null;
               return (
-                <div key={option.letter} className={`rounded-2xl border-2 px-5 py-4 text-lg transition-all ${style}`}>
-                  <button onClick={() => chooseOption(option.letter)} className="w-full text-left text-zinc-900" disabled={submitted}>
-                    <span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}
+                <div key={option.letter} className={`rounded-2xl border-2 px-5 py-4 text-lg transition-all sm:text-xl ${style}`}>
+                  <button onClick={() => chooseOption(option.letter)} className="flex w-full items-center justify-between gap-3 text-left text-zinc-900" disabled={submitted}>
+                    <span><span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}</span>
+                    {submitted && pickPct !== null && (
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold text-zinc-500">{pickPct}%</span>
+                    )}
                   </button>
                   {submitted && (isPicked || option.correct) && <ExplanationText text={option.explanation} />}
                   {submitted && !isPicked && !option.correct && (
                     <div className="mt-2">
-                      <button onClick={() => toggleExplain(option.letter)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-900">
-                        {revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}
-                      </button>
+                      <button onClick={() => toggleExplain(option.letter)} className="text-base font-semibold text-emerald-700 hover:text-emerald-900">{revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}</button>
                       {revealOpen && <ExplanationText text={option.explanation} />}
                     </div>
                   )}
@@ -631,7 +559,10 @@ export default function QuestionPage() {
             })}
           </div>
 
-          {/* Was this helpful — moved up, directly above the action buttons */}
+          {submitted && totalPicks >= 3 && (
+            <p className="mt-3 text-xs font-semibold text-zinc-400">% shows how other students answered ({totalPicks} responses)</p>
+          )}
+
           {submitted && (
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-zinc-600">Was this question helpful?</span>
@@ -641,14 +572,12 @@ export default function QuestionPage() {
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-between border-t border-zinc-100 pt-5">
-            <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-2.5 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">Finish</button>
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-100 pt-5">
+            <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-5 py-2.5 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300 sm:px-6">Finish</button>
             {!submitted ? (
-              <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-10 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">Submit Answer</button>
+              <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none sm:px-10">Submit</button>
             ) : (
-              <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-10 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-                {index + 1 < questions.length ? "Next Question →" : "Finish →"}
-              </button>
+              <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 sm:px-10">{index + 1 < questions.length ? "Next →" : "Finish →"}</button>
             )}
           </div>
 
@@ -660,9 +589,7 @@ export default function QuestionPage() {
           )}
 
           {submitted && thisStats && (
-            <p className="mt-5 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">
-              {thisStats.total <= 1 ? "🌍 You're the first to answer this one!" : "🌍 " + Math.round((thisStats.correct / thisStats.total) * 100) + "% of students got this right (" + thisStats.total + " answers)"}
-            </p>
+            <p className="mt-5 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">{thisStats.total <= 1 ? "🌍 You're the first to answer this one!" : "🌍 " + Math.round((thisStats.correct / thisStats.total) * 100) + "% of students got this right (" + thisStats.total + " answers)"}</p>
           )}
 
           <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4">
@@ -678,9 +605,7 @@ export default function QuestionPage() {
               <p className="font-bold text-amber-800">📚 Further resources</p>
               <p className="mt-1 text-xs font-semibold text-amber-700/70">Notes and videos for this topic</p>
               <div className="mt-3 flex flex-col gap-2">
-                {q.resources!.map((r, i) => (
-                  <Link key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900">{r.title} ↗</Link>
-                ))}
+                {q.resources!.map((r, i) => (<Link key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900">{r.title} ↗</Link>))}
               </div>
             </div>
           )}
@@ -689,35 +614,35 @@ export default function QuestionPage() {
         <Comments questionId={q.id} canPost={submitted} />
       </div>
 
-      <aside className="lg:w-60">
-        <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm lg:sticky lg:top-20">
-          <button onClick={() => setShowScore((s) => !s)} className="mb-4 w-full rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50">
-            {showScore ? "🙈 Hide score" : "👁 Show score"}
+      <aside className="lg:w-72">
+        <div className="lg:sticky lg:top-24">
+          <button onClick={() => setShowPanel((s) => !s)} className="mb-3 w-full rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50">
+            {showPanel ? "▾ Hide question list" : "▸ Show question list"}
           </button>
-          {showScore && answeredCount > 0 && (
-            <p className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-center text-sm font-bold text-emerald-800">{correctCount}/{answeredCount} · {accuracy}%</p>
+          {showPanel && (
+            <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+              {answeredCount > 0 && (
+                <p className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-center text-base font-bold text-emerald-800">{accuracy}%</p>
+              )}
+              <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
+              <div className="mt-4 flex max-h-[50vh] flex-col gap-2 overflow-y-auto pr-1">
+                {questions.map((qq, i) => {
+                  const a = answers[i];
+                  const isCurrent = i === index;
+                  const qFlagged = !!flagged[qq.id];
+                  const hasNote = (notes[qq.id] || "").trim().length > 0;
+                  let dot = "bg-zinc-200";
+                  if (a) dot = a.correct ? "bg-emerald-500" : "bg-red-400";
+                  return (
+                    <button key={i} onClick={() => { goToQuestion(i); setShowPanel(false); }} className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors ${isCurrent ? "bg-emerald-50 font-bold text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"}`}>
+                      <span className="flex items-center gap-1.5">Question {i + 1}{qFlagged && <span className="text-red-500">⚑</span>}{hasNote && <span className="text-emerald-600">📝</span>}</span>
+                      <span className={`h-3.5 w-3.5 rounded-full ${dot}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
-          <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
-          <div className="mt-4 flex max-h-[55vh] flex-col gap-1.5 overflow-y-auto pr-1">
-            {questions.map((qq, i) => {
-              const a = answers[i];
-              const isCurrent = i === index;
-              const qFlagged = !!flagged[qq.id];
-              const hasNote = (notes[qq.id] || "").trim().length > 0;
-              let dot = "bg-zinc-200";
-              if (a) dot = a.correct ? "bg-emerald-500" : "bg-red-400";
-              return (
-                <button key={i} onClick={() => goToQuestion(i)} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isCurrent ? "bg-emerald-50 font-bold text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"}`}>
-                  <span className="flex items-center gap-1.5">
-                    Question {i + 1}
-                    {qFlagged && <span className="text-red-500">⚑</span>}
-                    {hasNote && <span className="text-emerald-600">📝</span>}
-                  </span>
-                  <span className={`h-3.5 w-3.5 rounded-full ${dot}`} />
-                </button>
-              );
-            })}
-          </div>
         </div>
       </aside>
     </main>
