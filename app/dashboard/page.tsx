@@ -107,7 +107,7 @@ export default function DashboardPage() {
   const myPlans = PLANS.filter((p) => activeIds.includes(p.id));
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-4xl px-5 py-8 sm:px-6 sm:py-10">
       {showExamModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 px-6 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
@@ -125,39 +125,37 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-6">
-        <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Welcome back, <span className="text-emerald-700">{firstName}</span></h1>
-          <p className="mt-2 text-lg text-zinc-600">What would you like to study today?</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">Welcome back, <span className="text-emerald-700">{firstName}</span></h1>
+        <p className="mt-2 text-lg text-zinc-600">What would you like to study today?</p>
+      </div>
 
-        <div className="flex flex-wrap items-stretch gap-4">
-          <Link href="/notes" className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-6 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-            <span className="text-3xl">📝</span>
-            <span className="mt-1 text-2xl font-extrabold leading-tight text-emerald-700">{noteCount}</span>
-            <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">Notes</span>
-          </Link>
+      <div className="mt-6 grid grid-cols-3 gap-3 sm:gap-4">
+        <Link href="/notes" className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-3 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 sm:px-6 sm:py-4">
+          <span className="text-2xl sm:text-3xl">📝</span>
+          <span className="mt-1 text-xl font-extrabold leading-tight text-emerald-700 sm:text-2xl">{noteCount}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 sm:text-xs">Notes</span>
+        </Link>
 
-          <button onClick={() => setShowExamModal(true)} className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-6 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
-            <span className="text-3xl">📅</span>
-            {days !== null ? (
-              <>
-                <span className="mt-1 text-2xl font-extrabold leading-tight text-emerald-700">{days > 0 ? days : days === 0 ? "Today" : "—"}</span>
-                <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">{days > 0 ? `day${days === 1 ? "" : "s"} to exam` : days === 0 ? "exam day!" : "exam passed"}</span>
-              </>
-            ) : (
-              <>
-                <span className="mt-1 text-lg font-extrabold leading-tight text-emerald-700">Set date</span>
-                <span className="text-xs font-bold uppercase tracking-wide text-zinc-400">exam countdown</span>
-              </>
-            )}
-          </button>
+        <button onClick={() => setShowExamModal(true)} className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 sm:px-6 sm:py-4">
+          <span className="text-2xl sm:text-3xl">📅</span>
+          {days !== null ? (
+            <>
+              <span className="mt-1 text-xl font-extrabold leading-tight text-emerald-700 sm:text-2xl">{days > 0 ? days : days === 0 ? "Today" : "—"}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 sm:text-xs">{days > 0 ? `day${days === 1 ? "" : "s"} to exam` : days === 0 ? "exam day!" : "exam passed"}</span>
+            </>
+          ) : (
+            <>
+              <span className="mt-1 text-base font-extrabold leading-tight text-emerald-700 sm:text-lg">Set date</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 sm:text-xs">exam countdown</span>
+            </>
+          )}
+        </button>
 
-          <div className="flex flex-col justify-center rounded-2xl border border-orange-100 bg-orange-50 px-6 py-4">
-            <span className="text-3xl">🔥</span>
-            <span className="mt-1 text-2xl font-extrabold leading-tight text-orange-600">{streak}</span>
-            <span className="text-xs font-bold uppercase tracking-wide text-orange-600/70">day{streak === 1 ? "" : "s"} streak</span>
-          </div>
+        <div className="flex flex-col justify-center rounded-2xl border border-orange-100 bg-orange-50 px-3 py-3 sm:px-6 sm:py-4">
+          <span className="text-2xl sm:text-3xl">🔥</span>
+          <span className="mt-1 text-xl font-extrabold leading-tight text-orange-600 sm:text-2xl">{streak}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-orange-600/70 sm:text-xs">day{streak === 1 ? "" : "s"} streak</span>
         </div>
       </div>
 
