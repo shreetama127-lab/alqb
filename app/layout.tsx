@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import "./globals.css";
 import NavBar from "./NavBar";
+import { Analytics } from "@vercel/analytics/next";
 
 const nunito = Nunito({ subsets: ["latin"] });
 
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${nunito.className} min-h-screen bg-gradient-to-b from-emerald-50/80 via-white to-emerald-50/60 text-zinc-900`}>
         <NavBar />
         {children}
+        <Analytics />
       </body>
     </html>
   );
