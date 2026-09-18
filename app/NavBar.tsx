@@ -40,11 +40,10 @@ export default function NavBar() {
     <nav className="sticky top-0 z-20 border-b border-emerald-100 bg-white/90 shadow-sm shadow-emerald-900/5 backdrop-blur">
       <div className="flex items-center justify-between px-5 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-          <img src="/ALQB%20logo.png" alt="ALQB" className="h-9 w-auto" />
+          <img src="/logo.png" alt="ALQB" className="h-11 w-auto" />
           <span className="text-2xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
         </Link>
 
-        {/* Desktop links */}
         <div className="hidden items-center gap-1 md:flex">
           {loggedIn ? (
             <>
@@ -59,7 +58,6 @@ export default function NavBar() {
           ) : null}
         </div>
 
-        {/* Mobile hamburger button */}
         {loggedIn !== null && (
           <button
             onClick={() => setMenuOpen((o) => !o)}
@@ -71,7 +69,6 @@ export default function NavBar() {
         )}
       </div>
 
-      {/* Mobile dropdown */}
       {menuOpen && loggedIn !== null && (
         <div className="flex flex-col gap-1 border-t border-emerald-100 px-5 py-3 md:hidden">
           {loggedIn ? loggedInLinks : loggedOutLinks}

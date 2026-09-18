@@ -119,7 +119,7 @@ export default function Home() {
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
         <div>
           <div className="flex flex-col items-start gap-4">
-            <img src="/ALQB%20logo.png" alt="ALQB logo" className="h-40 w-auto mix-blend-multiply" />
+            <img src="/logo.png" alt="ALQB logo" className="h-52 w-auto" />
             <span className="text-6xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
           </div>
           <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
