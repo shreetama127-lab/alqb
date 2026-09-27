@@ -114,6 +114,7 @@ export default function QuestionPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportText, setReportText] = useState("");
   const [reportSent, setReportSent] = useState(false);
+  const [savedCards, setSavedCards] = useState<Record<number, boolean>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -211,6 +212,11 @@ export default function QuestionPage() {
         const fmap: Record<number, "up" | "down"> = {};
         (rateRows || []).forEach((r) => { fmap[r.question_id] = r.rating === 1 ? "up" : "down"; });
         setFeedback(fmap);
+
+        const { data: cardRows } = await supabase.from("flashcards").select("question_id").eq("user_id", userData.user.id).in("question_id", ids);
+        const cmap: Record<number, boolean> = {};
+        (cardRows || []).forEach((c) => { if (c.question_id) cmap[c.question_id] = true; });
+        setSavedCards(cmap);
       }
       setLoading(false);
     }
@@ -262,6 +268,7 @@ export default function QuestionPage() {
   const thisStats = stats[q.id];
   const thisPicks = picks[q.id];
   const thisNote = notes[q.id] || "";
+  const cardSaved = !!savedCards[q.id];
   const showResources = submitted && q.resources && q.resources.length > 0;
   const showTakeaway = submitted && q.key_takeaway && q.key_takeaway.trim().length > 0;
 
@@ -383,6 +390,14 @@ export default function QuestionPage() {
       await supabase.from("notes").upsert({ user_id: userData.user.id, question_id: qid, content: text, updated_at: new Date().toISOString() });
       setNoteSaved(true);
     }, 800);
+  }
+
+  async function addToFlashcards() {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) { alert("Please log in to save flashcards."); return; }
+    if (savedCards[q.id]) return;
+    const { error } = await supabase.from("flashcards").insert({ user_id: userData.user.id, question_id: q.id });
+    if (!error) setSavedCards((c) => ({ ...c, [q.id]: true }));
   }
 
   async function loadStats(questionId: number) {
@@ -568,6 +583,7 @@ export default function QuestionPage() {
               <span className="text-sm font-semibold text-zinc-600">Was this question helpful?</span>
               <button onClick={() => giveFeedback("up")} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${thisFeedback === "up" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:border-emerald-300"}`}>👍 Yes</button>
               <button onClick={() => giveFeedback("down")} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${thisFeedback === "down" ? "border-red-300 bg-red-50 text-red-600" : "border-zinc-200 text-zinc-500 hover:border-red-300"}`}>👎 No</button>
+              <button onClick={addToFlashcards} disabled={cardSaved} className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${cardSaved ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:border-emerald-300 hover:text-emerald-700"}`}>{cardSaved ? "✓ Added to flashcards" : "🃏 Add to flashcards"}</button>
               <button onClick={() => { setReportOpen(true); setReportSent(false); }} className="ml-auto rounded-full border border-zinc-200 px-4 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:border-amber-400 hover:text-amber-600">⚠ Report</button>
             </div>
           )}
