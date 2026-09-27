@@ -23,6 +23,7 @@ export default function NavBar() {
     <>
       <Link href="/study" className={linkClass} onClick={() => setMenuOpen(false)}>Study</Link>
       <Link href="/dashboard" className={linkClass} onClick={() => setMenuOpen(false)}>Progress</Link>
+      <Link href="/flashcards" className={linkClass} onClick={() => setMenuOpen(false)}>Flashcards</Link>
       <Link href="/tutorials" className={linkClass} onClick={() => setMenuOpen(false)}>Tutorials</Link>
       <Link href="/tips" className={linkClass} onClick={() => setMenuOpen(false)}>Study Tips</Link>
     </>
