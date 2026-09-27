@@ -54,7 +54,6 @@ export default function FlashcardsPage() {
 
     const list = (fc || []) as Flashcard[];
 
-    // fetch question details for cards linked to a question
     const qIds = list.map((c) => c.question_id).filter((x): x is number => !!x);
     if (qIds.length > 0) {
       const { data: qs } = await supabase
@@ -186,4 +185,30 @@ export default function FlashcardsPage() {
                   {!isFlipped ? (
                     <p className="mt-4 text-lg font-semibold text-zinc-900">{front}</p>
                   ) : (
-                    <div className="mt-4"></div>
+                    <div className="mt-4">
+                      {card.question_id ? (
+                        <>
+                          <p className="text-lg font-extrabold text-emerald-700">{answerText}</p>
+                          {explanation && <p className="mt-3 text-sm text-zinc-700">{explanation}</p>}
+                          {card.q_takeaway && <p className="mt-3 rounded-xl bg-indigo-50/60 px-3 py-2 text-sm text-zinc-700">{card.q_takeaway}</p>}
+                        </>
+                      ) : (
+                        <p className="text-base text-zinc-800">{back}</p>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-4 text-xs font-semibold text-zinc-400">Tap to {isFlipped ? "see question" : "reveal answer"}</p>
+                </button>
+                <button onClick={() => deleteCard(card.id)} className="absolute right-3 top-3 rounded-full bg-white/80 px-2 py-1 text-xs font-bold text-zinc-400 transition-colors hover:text-red-500" title="Delete card">🗑</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-10">
+        <Link href="/dashboard" className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300">← Back to dashboard</Link>
+      </div>
+    </main>
+  );
+}
