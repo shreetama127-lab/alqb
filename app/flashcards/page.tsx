@@ -41,6 +41,12 @@ export default function FlashcardsPage() {
   const [newBack, setNewBack] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // study mode
+  const [studyMode, setStudyMode] = useState(false);
+  const [studyOrder, setStudyOrder] = useState<number[]>([]);
+  const [studyIndex, setStudyIndex] = useState(0);
+  const [studyFlipped, setStudyFlipped] = useState(false);
+
   async function load() {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) { setLoggedIn(false); setLoading(false); return; }
@@ -114,6 +120,36 @@ export default function FlashcardsPage() {
     setCards((c) => c.filter((x) => x.id !== id));
   }
 
+  function startStudy(shuffle: boolean) {
+    const order = cards.map((_, i) => i);
+    if (shuffle) {
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    }
+    setStudyOrder(order);
+    setStudyIndex(0);
+    setStudyFlipped(false);
+    setStudyMode(true);
+  }
+
+  function studyNext() {
+    if (studyIndex + 1 < studyOrder.length) { setStudyIndex(studyIndex + 1); setStudyFlipped(false); }
+  }
+  function studyPrev() {
+    if (studyIndex > 0) { setStudyIndex(studyIndex - 1); setStudyFlipped(false); }
+  }
+
+  function cardContent(card: Flashcard) {
+    const front = card.question_id ? (card.q_stem || "Question") : (card.front || "");
+    const answerText = card.question_id ? correctAnswerText(card.q_options) : "";
+    const explanation = card.question_id ? correctExplanation(card.q_options) : "";
+    const back = card.question_id ? "" : (card.back || "");
+    const label = card.question_id ? `${card.q_board || ""} ${card.q_ref || ""}`.trim() : "Custom card";
+    return { front, answerText, explanation, back, label };
+  }
+
   if (loading)
     return <main className="mx-auto flex min-h-[70vh] max-w-4xl items-center justify-center px-6"><p className="text-zinc-400">Loading flashcards…</p></main>;
 
@@ -125,6 +161,57 @@ export default function FlashcardsPage() {
       </main>
     );
 
+  // STUDY MODE VIEW
+  if (studyMode && cards.length > 0) {
+    const card = cards[studyOrder[studyIndex]];
+    const { front, answerText, explanation, back, label } = cardContent(card);
+    return (
+      <main className="mx-auto flex min-h-[80vh] max-w-2xl flex-col px-5 py-8 sm:px-6">
+        <div className="flex items-center justify-between">
+          <button onClick={() => setStudyMode(false)} className="rounded-full border-2 border-zinc-200 bg-white px-5 py-2 font-bold text-zinc-600 transition-all hover:border-emerald-300">✕ Exit</button>
+          <span className="text-sm font-bold text-zinc-500">{studyIndex + 1} of {studyOrder.length}</span>
+          <button onClick={() => startStudy(true)} className="rounded-full border-2 border-emerald-200 bg-white px-5 py-2 font-bold text-emerald-700 transition-all hover:border-emerald-400">🔀 Shuffle</button>
+        </div>
+
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-emerald-100">
+          <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${Math.round(((studyIndex + 1) / studyOrder.length) * 100)}%` }} />
+        </div>
+
+        <button
+          onClick={() => setStudyFlipped((f) => !f)}
+          className={`mt-6 flex min-h-[45vh] w-full flex-col justify-center rounded-3xl border-2 p-8 text-left shadow-sm transition-all ${studyFlipped ? "border-emerald-400 bg-emerald-50/50" : "border-emerald-100 bg-white"}`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">{label || "Card"}</span>
+            <span className="text-xs font-semibold text-zinc-400">{studyFlipped ? "Answer" : "Question"}</span>
+          </div>
+          {!studyFlipped ? (
+            <p className="mt-6 text-2xl font-semibold text-zinc-900">{front}</p>
+          ) : (
+            <div className="mt-6">
+              {card.question_id ? (
+                <>
+                  <p className="text-2xl font-extrabold text-emerald-700">{answerText}</p>
+                  {explanation && <p className="mt-4 text-base text-zinc-700">{explanation}</p>}
+                  {card.q_takeaway && <p className="mt-4 rounded-xl bg-indigo-50/60 px-4 py-3 text-base text-zinc-700">{card.q_takeaway}</p>}
+                </>
+              ) : (
+                <p className="text-xl text-zinc-800">{back}</p>
+              )}
+            </div>
+          )}
+          <p className="mt-6 text-xs font-semibold text-zinc-400">Tap to {studyFlipped ? "see question" : "reveal answer"}</p>
+        </button>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <button onClick={studyPrev} disabled={studyIndex === 0} className="rounded-full border-2 border-zinc-200 bg-white px-6 py-3 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">← Previous</button>
+          <button onClick={studyNext} disabled={studyIndex + 1 >= studyOrder.length} className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">Next →</button>
+        </div>
+      </main>
+    );
+  }
+
+  // GRID VIEW
   return (
     <main className="mx-auto max-w-4xl px-5 py-8 sm:px-6 sm:py-10">
       {showCreate && (
@@ -154,7 +241,12 @@ export default function FlashcardsPage() {
           <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">Flashcards</h1>
           <p className="mt-2 text-zinc-600">Tap a card to flip it. {cards.length} card{cards.length === 1 ? "" : "s"}.</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="rounded-full bg-emerald-700 px-6 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">➕ New card</button>
+        <div className="flex flex-wrap gap-2">
+          {cards.length > 0 && (
+            <button onClick={() => startStudy(false)} className="rounded-full bg-emerald-700 px-6 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">▶ Study mode</button>
+          )}
+          <button onClick={() => setShowCreate(true)} className="rounded-full border-2 border-emerald-200 bg-white px-6 py-3 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">➕ New card</button>
+        </div>
       </div>
 
       {cards.length === 0 ? (
@@ -167,11 +259,7 @@ export default function FlashcardsPage() {
         <div className="mt-8 grid gap-5 sm:grid-cols-2">
           {cards.map((card) => {
             const isFlipped = !!flipped[card.id];
-            const front = card.question_id ? (card.q_stem || "Question") : (card.front || "");
-            const answerText = card.question_id ? correctAnswerText(card.q_options) : "";
-            const explanation = card.question_id ? correctExplanation(card.q_options) : "";
-            const back = card.question_id ? "" : (card.back || "");
-            const label = card.question_id ? `${card.q_board || ""} ${card.q_ref || ""}`.trim() : "Custom card";
+            const { front, answerText, explanation, back, label } = cardContent(card);
             return (
               <div key={card.id} className="relative">
                 <button
