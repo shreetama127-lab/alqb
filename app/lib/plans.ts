@@ -28,9 +28,10 @@ export const PLANS: Plan[] = [
   { id: "aqa-chemistry", qualification: "A-Level", subject: "Chemistry", variant: "AQA", title: "AQA A-Level Chemistry", emoji: "⚗️", live: false },
   { id: "ib-biology-sl", qualification: "IB", subject: "Biology", variant: "Standard Level", title: "IB Biology (SL)", emoji: "🌍", live: false },
   { id: "ib-biology-hl", qualification: "IB", subject: "Biology", variant: "Higher Level", title: "IB Biology (HL)", emoji: "🌏", live: false },
+  { id: "tutorial-recordings", qualification: "A-Level", subject: "Tutorials", variant: "Recordings", title: "Tutorial Recordings", emoji: "🎥", live: true },
 ];
 
-export const FREE_PLAN_IDS = ["ocr-biology"];
+export const FREE_PLAN_IDS = ["ocr-biology", "tutorial-recordings"];
 
 export const MODULE_TITLES: Record<string, string> = {
   M2: "Module 2 — Foundations in Biology",

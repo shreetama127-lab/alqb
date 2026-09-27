@@ -162,12 +162,16 @@ export default function DashboardPage() {
       <div className="mt-8 grid gap-5 sm:grid-cols-2">
         {myPlans.map((plan) => {
           const qCount = countsByBoard[plan.variant] ?? 0;
+          const isRecordings = plan.id === "tutorial-recordings";
+          const href = isRecordings ? "/recordings" : "/study";
+          const subtitle = isRecordings ? "Masterclass recordings" : (qCount > 0 ? `${qCount} question${qCount === 1 ? "" : "s"}` : "Coming soon");
+          const action = isRecordings ? "View recordings →" : "Start studying →";
           return (
-            <Link key={plan.id} href="/study" className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg">
+            <Link key={plan.id} href={href} className="group rounded-3xl border-2 border-emerald-100 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-lg">
               <p className="text-4xl">{plan.emoji}</p>
               <h3 className="mt-4 text-xl font-extrabold text-zinc-900 group-hover:text-emerald-700">{plan.title}</h3>
-              <p className="mt-1 text-sm font-semibold text-zinc-500">{qCount > 0 ? `${qCount} question${qCount === 1 ? "" : "s"}` : "Coming soon"}</p>
-              <p className="mt-4 text-sm font-bold text-emerald-700">Start studying →</p>
+              <p className="mt-1 text-sm font-semibold text-zinc-500">{subtitle}</p>
+              <p className="mt-4 text-sm font-bold text-emerald-700">{action}</p>
             </Link>
           );
         })}
