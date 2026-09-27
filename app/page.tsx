@@ -114,18 +114,20 @@ export default function Home() {
   const canSubmit =
     email &&
     password &&
-    (mode === "login" || (firstName && school && agreeTerms && confirmAge));return (
+    (mode === "login" || (firstName && school && agreeTerms && confirmAge));
+
+  return (
     <main className="mx-auto max-w-5xl px-6 py-16">
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
         <div>
-          <div className="flex flex-col items-start gap-4">
+          <div className="flex flex-col items-start gap-6">
             <img src="/logo.png" alt="ALQB logo" className="h-52 w-auto" />
             <span className="text-6xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
           </div>
-          <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
+          <h1 className="mt-10 text-4xl font-extrabold leading-tight text-zinc-900">
             Master A-Level Biology &amp; Chemistry.
           </h1>
-          <p className="mt-4 text-lg text-zinc-600">
+          <p className="mt-5 text-lg text-zinc-600">
             Exam-board specific questions with instant explanations, timed practice, and progress tracking.
           </p>
         </div>
@@ -196,7 +198,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mt-20 grid gap-5 sm:grid-cols-3">
+      <div className="mt-16 grid gap-5 sm:grid-cols-3">
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">📚</p>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Exam-board specific</h3>
@@ -205,7 +207,7 @@ export default function Home() {
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">💡</p>
           <h3 className="mt-4 text-lg font-bold text-zinc-900">Explained answers</h3>
-          <p className="mt-2 text-sm text-zinc-600">Every option explained.</p>
+          <p className="mt-2 text-sm text-zinc-600">So you know where you went wrong.</p>
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">📈</p>
@@ -214,7 +216,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-500">
+      <div className="mt-12 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-semibold text-zinc-500">
         <Link href="/about" className="hover:text-emerald-700">About us</Link>
         <Link href="/contact" className="hover:text-emerald-700">Contact us</Link>
         <Link href="/tutorials" className="hover:text-emerald-700">Tutorials</Link>
