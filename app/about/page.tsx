@@ -1,217 +1,122 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/app/lib/supabase";
 
-export default function Home() {
-  const [mode, setMode] = useState<"login" | "signup">("signup");
-  const [firstName, setFirstName] = useState("");
-  const [school, setSchool] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [agreeTerms, setAgreeTerms] = useState(false);
-  const [confirmAge, setConfirmAge] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [loading, setLoading] = useState(false);
+function DoctorsCartoon() {
+  return (
+    <svg viewBox="0 0 360 200" className="mx-auto h-auto w-full max-w-md" role="img" aria-label="Three cartoon doctors">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ecfdf5" />
+          <stop offset="1" stopColor="#ffffff" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="360" height="200" rx="24" fill="url(#bg)" />
+      {[60, 180, 300].map((cx, i) => {
+        const skin = ["#f2d3b3", "#c99a6a", "#8d5a3c"][i];
+        return (
+          <g key={i} transform={`translate(${cx},0)`}>
+            {/* body / coat */}
+            <path d="M-34 190 C-34 150 -22 132 0 132 C22 132 34 150 34 190 Z" fill="#ffffff" stroke="#d1fae5" strokeWidth="3" />
+            {/* collar */}
+            <path d="M-10 134 L0 150 L10 134 Z" fill="#10b981" />
+            {/* stethoscope */}
+            <path d="M-8 136 C-8 158 8 158 8 136" fill="none" stroke="#059669" strokeWidth="3" />
+            <circle cx="8" cy="160" r="4" fill="#059669" />
+            {/* neck */}
+            <rect x="-7" y="120" width="14" height="16" rx="6" fill={skin} />
+            {/* head */}
+            <circle cx="0" cy="104" r="22" fill={skin} />
+            {/* hair */}
+            <path d="M-22 100 C-22 84 22 84 22 100 C22 90 14 82 0 82 C-14 82 -22 90 -22 100 Z" fill={["#3b2a1a", "#1f2937", "#0f172a"][i]} />
+            {/* eyes */}
+            <circle cx="-8" cy="104" r="2.4" fill="#1f2937" />
+            <circle cx="8" cy="104" r="2.4" fill="#1f2937" />
+            {/* smile */}
+            <path d="M-8 114 C-3 120 3 120 8 114" fill="none" stroke="#1f2937" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
-  const [mlEmail, setMlEmail] = useState("");
-  const [mlMsg, setMlMsg] = useState("");
+export default function AboutPage() {
+  return (
+    <main className="mx-auto max-w-3xl px-5 py-12 sm:px-6">
+      <div className="text-center">
+        <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 sm:text-5xl">About us</h1>
+        <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
+          The people — and the thinking — behind ALQB.
+        </p>
+      </div>
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) window.location.href = "/dashboard";
-    });
-  }, []);
+      <div className="mt-10 overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm">
+        <DoctorsCartoon />
+        <p className="px-6 pb-5 pt-1 text-center text-sm font-semibold text-zinc-400">A real team photo is on the way — for now, here&apos;s us in cartoon form 🩺</p>
+      </div>
 
-  function showMessage(text: string, error: boolean) {
-    setMessage(text);
-    setIsError(error);
-  }
+      <div className="mt-10 flex flex-col gap-5 text-lg leading-relaxed text-zinc-700">
+        <p>
+          We&apos;re three doctors and the cofounders of ALQB, brought together by a shared love of education and teaching.
+        </p>
+        <p>
+          Through our own journey — from A-Levels to medical school and beyond — we learned first-hand what actually
+          makes revision stick. It isn&apos;t re-reading notes or highlighting pages. It&apos;s <span className="font-bold text-emerald-700">active recall</span>:
+          testing yourself again and again. It&apos;s <span className="font-bold text-emerald-700">spaced repetition</span>:
+          revisiting topics just as you&apos;re about to forget them. It&apos;s <span className="font-bold text-emerald-700">tracking your progress</span> so
+          you know exactly where you&apos;re strong and where to focus. And it&apos;s being able to <span className="font-bold text-emerald-700">understand and discuss
+          why an answer is right</span> — not just memorise it.
+        </p>
+        <p>
+          We built ALQB to put all of that in one place, designed for the exams you&apos;re actually sitting.
+        </p>
+      </div>
 
-  async function joinMailingList() {
-    if (!mlEmail || !mlEmail.includes("@")) { setMlMsg("Please enter a valid email."); return; }
-    const { error } = await supabase.from("mailing_list").insert({ email: mlEmail.toLowerCase().trim() });
-    if (error && !error.message.includes("duplicate")) { setMlMsg("Something went wrong — please try again."); return; }
-    setMlMsg("You're on the list! 🎉");
-    setMlEmail("");
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
-
-    if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            school: school,
-            agreed_terms_at: new Date().toISOString(),
-            confirmed_age_16: true,
-          },
-        },
-      });
-
-      if (error) {
-        if (error.message.toLowerCase().includes("already registered")) {
-          setMode("login");
-          showMessage("You already have an account — log in below.", true);
-        } else {
-          showMessage(error.message, true);
-        }
-        setLoading(false);
-        return;
-      }
-
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setMode("login");
-        showMessage("You already have an account — log in below.", true);
-        setLoading(false);
-        return;
-      }
-
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-      if (loginError) {
-        showMessage("Account created! You can now log in.", false);
-        setMode("login");
-        setLoading(false);
-      } else {
-        if (data.user) {
-          await supabase.from("user_profiles").upsert({
-            user_id: data.user.id,
-            school: school,
-            updated_at: new Date().toISOString(),
-          });
-        }
-        window.location.href = "/dashboard";
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (error.message.toLowerCase().includes("invalid")) {
-          showMessage("Wrong email or password — double-check and try again.", true);
-        } else {
-          showMessage(error.message, true);
-        }
-        setLoading(false);
-      } else {
-        window.location.href = "/dashboard";
-      }
-    }
-  }
-
-  const canSubmit =
-    email &&
-    password &&
-    (mode === "login" || (firstName && school && agreeTerms && confirmAge));return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
-      <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-        <div>
-          <div className="flex items-center gap-3">
-            <img src="/ALQB%20logo.png" alt="ALQB logo" className="h-16 w-auto" />
-            <span className="text-5xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
+      <div className="mt-10">
+        <h2 className="text-2xl font-extrabold text-zinc-900">What ALQB gives you</h2>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">📚</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Exam-board specific banks</h3>
+            <p className="mt-1 text-sm text-zinc-600">Questions mapped to your exact specification, so every minute counts.</p>
           </div>
-          <h1 className="mt-8 text-4xl font-extrabold leading-tight text-zinc-900">
-            Master A-Level Biology &amp; Chemistry.
-          </h1>
-          <p className="mt-4 text-lg text-zinc-600">
-            Exam-board specific questions with instant explanations, timed practice, and progress tracking.
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-emerald-100 bg-white p-8 shadow-lg shadow-emerald-700/5">
-          <div className="flex rounded-full bg-emerald-50 p-1">
-            <button type="button" onClick={() => { setMode("signup"); setMessage(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "signup" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
-              Create Account
-            </button>
-            <button type="button" onClick={() => { setMode("login"); setMessage(""); }} className={`flex-1 rounded-full py-2 text-sm font-bold transition-colors ${mode === "login" ? "bg-emerald-700 text-white" : "text-emerald-700"}`}>
-              Log In
-            </button>
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">💡</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Fully explained answers</h3>
+            <p className="mt-1 text-sm text-zinc-600">Every option explained — so you know where you went wrong, and why.</p>
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="mt-6 flex flex-col gap-3">
-              {mode === "signup" && (
-                <>
-                  <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-                  <input type="text" placeholder="School or institution name" value={school} onChange={(e) => setSchool(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-                </>
-              )}
-              <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-              <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-            </div>
-
-            {mode === "signup" && (
-              <div className="mt-5 flex flex-col gap-3">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input type="checkbox" checked={confirmAge} onChange={(e) => setConfirmAge(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />
-                  <span className="text-sm text-zinc-600">I confirm I am 16 or over.</span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" />
-                  <span className="text-sm text-zinc-600">
-                    I agree to the{" "}
-                    <Link href="/terms" target="_blank" className="font-bold text-emerald-700 hover:underline">Terms of Use</Link>
-                    {" "}and{" "}
-                    <Link href="/privacy" target="_blank" className="font-bold text-emerald-700 hover:underline">Privacy Policy</Link>.
-                  </span>
-                </label>
-              </div>
-            )}
-
-            <button type="submit" disabled={loading || !canSubmit} className="mt-5 w-full rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">
-              {loading ? "Please wait…" : mode === "signup" ? "Create Account" : "Log In →"}
-            </button>
-          </form>
-
-          {message && (
-            <p className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
-              {message}
-            </p>
-          )}
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">🃏</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Flashcards</h3>
+            <p className="mt-1 text-sm text-zinc-600">Turn any question into a flashcard and drill it with active recall.</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">⏱️</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Timed practice</h3>
+            <p className="mt-1 text-sm text-zinc-600">Build exam stamina with timed challenges and a countdown to your exam.</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">📈</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Progress tracking</h3>
+            <p className="mt-1 text-sm text-zinc-600">See your accuracy grow topic by topic and spot your weak areas early.</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+            <p className="text-2xl">💬</p>
+            <h3 className="mt-2 font-bold text-zinc-900">Discuss the answers</h3>
+            <p className="mt-1 text-sm text-zinc-600">Talk through questions with other students — because explaining it is how you learn it.</p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-20 grid gap-5 sm:grid-cols-3">
-        <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
-          <p className="text-4xl">📚</p>
-          <h3 className="mt-4 text-lg font-bold text-zinc-900">Exam-board specific</h3>
-          <p className="mt-2 text-sm text-zinc-600">Mapped to your spec.</p>
-        </div>
-        <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
-          <p className="text-4xl">💡</p>
-          <h3 className="mt-4 text-lg font-bold text-zinc-900">Explained answers</h3>
-          <p className="mt-2 text-sm text-zinc-600">Every option explained.</p>
-        </div>
-        <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
-          <p className="text-4xl">📈</p>
-          <h3 className="mt-4 text-lg font-bold text-zinc-900">Track progress</h3>
-          <p className="mt-2 text-sm text-zinc-600">See your accuracy grow.</p>
-        </div>
+      <div className="mt-10 rounded-3xl border border-dashed border-emerald-200 bg-emerald-50/50 p-6 text-center">
+        <p className="text-lg font-bold text-zinc-800">Made by doctors, for the next generation of students.</p>
+        <p className="mt-1 text-sm text-zinc-600">We&apos;re just getting started — new banks, tutorials and features are on the way.</p>
       </div>
 
-      <div className="mt-16 rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
-        <h2 className="text-2xl font-extrabold text-zinc-900">📬 Join our mailing list</h2>
-        <p className="mt-2 text-zinc-600">Be the first to hear about new question banks, features and study tips.</p>
-        <div className="mt-5 flex flex-col gap-3 sm:mx-auto sm:max-w-md sm:flex-row">
-          <input type="email" placeholder="Your email" value={mlEmail} onChange={(e) => setMlEmail(e.target.value)} className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 outline-none focus:border-emerald-400" />
-          <button onClick={joinMailingList} className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-            Sign up
-          </button>
-        </div>
-        {mlMsg && <p className="mt-3 text-sm font-semibold text-emerald-700">{mlMsg}</p>}
-      </div>
-
-      <div className="mt-12 flex justify-center gap-6 text-sm font-semibold text-zinc-500">
-        <Link href="/about" className="hover:text-emerald-700">About us</Link>
-        <Link href="/contact" className="hover:text-emerald-700">Contact us</Link>
-        <Link href="/terms" className="hover:text-emerald-700">Terms of Use</Link>
-        <Link href="/privacy" className="hover:text-emerald-700">Privacy Policy</Link>
+      <div className="mt-10 flex flex-wrap justify-center gap-3">
+        <Link href="/" className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">Get started</Link>
+        <Link href="/contact" className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300">Contact us</Link>
       </div>
     </main>
   );
