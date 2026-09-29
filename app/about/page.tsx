@@ -12,31 +12,22 @@ function DoctorsCartoon() {
         </linearGradient>
       </defs>
       <rect x="0" y="0" width="360" height="200" rx="24" fill="url(#bg)" />
-      {[60, 180, 300].map((cx, i) => {
-        const skin = ["#f2d3b3", "#c99a6a", "#8d5a3c"][i];
-        return (
-          <g key={i} transform={`translate(${cx},0)`}>
-            {/* body / coat */}
-            <path d="M-34 190 C-34 150 -22 132 0 132 C22 132 34 150 34 190 Z" fill="#ffffff" stroke="#d1fae5" strokeWidth="3" />
-            {/* collar */}
-            <path d="M-10 134 L0 150 L10 134 Z" fill="#10b981" />
-            {/* stethoscope */}
-            <path d="M-8 136 C-8 158 8 158 8 136" fill="none" stroke="#059669" strokeWidth="3" />
-            <circle cx="8" cy="160" r="4" fill="#059669" />
-            {/* neck */}
-            <rect x="-7" y="120" width="14" height="16" rx="6" fill={skin} />
-            {/* head */}
-            <circle cx="0" cy="104" r="22" fill={skin} />
-            {/* hair */}
-            <path d="M-22 100 C-22 84 22 84 22 100 C22 90 14 82 0 82 C-14 82 -22 90 -22 100 Z" fill={["#3b2a1a", "#1f2937", "#0f172a"][i]} />
-            {/* eyes */}
-            <circle cx="-8" cy="104" r="2.4" fill="#1f2937" />
-            <circle cx="8" cy="104" r="2.4" fill="#1f2937" />
-            {/* smile */}
-            <path d="M-8 114 C-3 120 3 120 8 114" fill="none" stroke="#1f2937" strokeWidth="2.4" strokeLinecap="round" />
-          </g>
-        );
-      })}
+      {[60, 180, 300].map((cx, i) => (
+        <g key={i} transform={`translate(${cx},0)`}>
+          <path d="M-34 190 C-34 150 -22 132 0 132 C22 132 34 150 34 190 Z" fill="#ffffff" stroke="#d1fae5" strokeWidth="3" />
+          <path d="M-10 134 L0 150 L10 134 Z" fill="#10b981" />
+          <path d="M-8 136 C-8 158 8 158 8 136" fill="none" stroke="#059669" strokeWidth="3" />
+          <circle cx="8" cy="160" r="4" fill="#059669" />
+          <rect x="-7" y="120" width="14" height="16" rx="6" fill="#f2d3b3" />
+          <circle cx="0" cy="104" r="22" fill="#f2d3b3" />
+          {/* long hair */}
+          <path d="M-24 104 C-24 78 24 78 24 104 L24 128 C24 128 18 118 18 104 C18 118 12 122 0 122 C-12 122 -18 118 -18 104 C-18 118 -24 128 -24 128 Z" fill="#5b3a29" />
+          <path d="M-22 100 C-22 84 22 84 22 100 C22 90 14 82 0 82 C-14 82 -22 90 -22 100 Z" fill="#5b3a29" />
+          <circle cx="-8" cy="104" r="2.4" fill="#1f2937" />
+          <circle cx="8" cy="104" r="2.4" fill="#1f2937" />
+          <path d="M-8 114 C-3 120 3 120 8 114" fill="none" stroke="#1f2937" strokeWidth="2.4" strokeLinecap="round" />
+        </g>
+      ))}
     </svg>
   );
 }
@@ -46,30 +37,23 @@ export default function AboutPage() {
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-6">
       <div className="text-center">
         <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 sm:text-5xl">About us</h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
-          The people — and the thinking — behind ALQB.
-        </p>
+        <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">The people behind ALQB.</p>
       </div>
 
       <div className="mt-10 overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm">
         <DoctorsCartoon />
-        <p className="px-6 pb-5 pt-1 text-center text-sm font-semibold text-zinc-400">A real team photo is on the way — for now, here&apos;s us in cartoon form 🩺</p>
+        <p className="px-6 pb-5 pt-1 text-center text-sm font-semibold text-zinc-400">A real team photo is on the way. For now, here we are in cartoon form 🩺</p>
       </div>
 
       <div className="mt-10 flex flex-col gap-5 text-lg leading-relaxed text-zinc-700">
         <p>
-          We&apos;re three doctors and the cofounders of ALQB, brought together by a shared love of education and teaching.
+          We are three doctors and the cofounders of ALQB. We started it because we love teaching, and because we remember exactly how hard these exams can feel.
         </p>
         <p>
-          Through our own journey — from A-Levels to medical school and beyond — we learned first-hand what actually
-          makes revision stick. It isn&apos;t re-reading notes or highlighting pages. It&apos;s <span className="font-bold text-emerald-700">active recall</span>:
-          testing yourself again and again. It&apos;s <span className="font-bold text-emerald-700">spaced repetition</span>:
-          revisiting topics just as you&apos;re about to forget them. It&apos;s <span className="font-bold text-emerald-700">tracking your progress</span> so
-          you know exactly where you&apos;re strong and where to focus. And it&apos;s being able to <span className="font-bold text-emerald-700">understand and discuss
-          why an answer is right</span> — not just memorise it.
+          Along the way, from A-Levels through medical school and into practice, we worked out what actually helps you remember things. Testing yourself over and over beats reading notes again. Coming back to a topic just as it starts to fade locks it in. Keeping an eye on your progress shows you where to put your energy. And talking through why an answer is right, rather than just learning that it is, is what makes it stick.
         </p>
         <p>
-          We built ALQB to put all of that in one place, designed for the exams you&apos;re actually sitting.
+          ALQB brings all of that together in one place, built around the exams you are actually sitting.
         </p>
       </div>
 
@@ -84,7 +68,7 @@ export default function AboutPage() {
           <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
             <p className="text-2xl">💡</p>
             <h3 className="mt-2 font-bold text-zinc-900">Fully explained answers</h3>
-            <p className="mt-1 text-sm text-zinc-600">Every option explained — so you know where you went wrong, and why.</p>
+            <p className="mt-1 text-sm text-zinc-600">Every option explained, so you know where you went wrong and why.</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
             <p className="text-2xl">🃏</p>
@@ -99,19 +83,19 @@ export default function AboutPage() {
           <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
             <p className="text-2xl">📈</p>
             <h3 className="mt-2 font-bold text-zinc-900">Progress tracking</h3>
-            <p className="mt-1 text-sm text-zinc-600">See your accuracy grow topic by topic and spot your weak areas early.</p>
+            <p className="mt-1 text-sm text-zinc-600">Watch your accuracy grow topic by topic and catch weak areas early.</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
             <p className="text-2xl">💬</p>
             <h3 className="mt-2 font-bold text-zinc-900">Discuss the answers</h3>
-            <p className="mt-1 text-sm text-zinc-600">Talk through questions with other students — because explaining it is how you learn it.</p>
+            <p className="mt-1 text-sm text-zinc-600">Talk questions through with other students, because explaining it is how you learn it.</p>
           </div>
         </div>
       </div>
 
       <div className="mt-10 rounded-3xl border border-dashed border-emerald-200 bg-emerald-50/50 p-6 text-center">
         <p className="text-lg font-bold text-zinc-800">Made by doctors, for the next generation of students.</p>
-        <p className="mt-1 text-sm text-zinc-600">We&apos;re just getting started — new banks, tutorials and features are on the way.</p>
+        <p className="mt-1 text-sm text-zinc-600">We are just getting started. New banks, tutorials and features are on the way.</p>
       </div>
 
       <div className="mt-10 flex flex-wrap justify-center gap-3">

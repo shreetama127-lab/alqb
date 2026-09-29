@@ -5,14 +5,14 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 
 const SESSIONS = [
-  "Biological Molecules & Cell Biology Foundations",
-  "Membranes, Transport & Exchange",
-  "DNA, Genetics & Cell Division",
-  "Biodiversity, Classification & Evolution",
-  "Physiology — Transport Systems in Animals & Plants",
-  "Homeostasis, Communication & Coordination",
-  "Photosynthesis, Respiration & Metabolism",
-  "Ecology, Populations, Biotechnology & Exam Mastery",
+  { title: "Biological Molecules & Cell Biology Foundations", date: "Wed 15 October" },
+  { title: "Membranes, Transport & Exchange", date: "Wed 22 October" },
+  { title: "DNA, Genetics & Cell Division", date: "Wed 29 October" },
+  { title: "Biodiversity, Classification & Evolution", date: "Wed 5 November" },
+  { title: "Physiology: Transport Systems in Animals & Plants", date: "Wed 12 November" },
+  { title: "Homeostasis, Communication & Coordination", date: "Wed 19 November" },
+  { title: "Photosynthesis, Respiration & Metabolism", date: "Wed 26 November" },
+  { title: "Ecology, Populations, Biotechnology & Exam Mastery", date: "Wed 3 December" },
 ];
 
 export default function TutorialsPage() {
@@ -34,7 +34,7 @@ export default function TutorialsPage() {
       message: message.trim() || null,
     });
     setBusy(false);
-    if (err) { setError("Something went wrong — please try again."); return; }
+    if (err) { setError("Something went wrong, please try again."); return; }
     setSent(true);
   }
 
@@ -44,7 +44,7 @@ export default function TutorialsPage() {
         <p className="text-5xl">🎓</p>
         <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-zinc-900">ALQB Tutorials</h1>
         <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
-          Weekly Biology tutorials to help you ace your exams — taught by experienced tutors who&apos;ve been through the process themselves.
+          Weekly Biology tutorials to help you ace your exams, taught by experienced tutors who&apos;ve been through it all themselves.
         </p>
       </div>
 
@@ -52,7 +52,7 @@ export default function TutorialsPage() {
         <div className="rounded-3xl border border-emerald-100 bg-white p-6 text-center shadow-sm">
           <p className="text-3xl">📅</p>
           <h3 className="mt-3 font-bold text-zinc-900">Weekly</h3>
-          <p className="mt-1 text-sm text-zinc-500">One session every week, 7pm</p>
+          <p className="mt-1 text-sm text-zinc-500">Every Wednesday at 7pm</p>
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-6 text-center shadow-sm">
           <p className="text-3xl">⏱️</p>
@@ -61,8 +61,8 @@ export default function TutorialsPage() {
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-6 text-center shadow-sm">
           <p className="text-3xl">🚀</p>
-          <h3 className="mt-3 font-bold text-zinc-900">From November</h3>
-          <p className="mt-1 text-sm text-zinc-500">Schedule posted soon</p>
+          <h3 className="mt-3 font-bold text-zinc-900">8 weeks</h3>
+          <p className="mt-1 text-sm text-zinc-500">A full A-Level Biology series</p>
         </div>
       </div>
 
@@ -71,16 +71,16 @@ export default function TutorialsPage() {
           <span className="text-2xl">📚</span>
           <h2 className="text-2xl font-extrabold text-zinc-900">Upcoming sessions</h2>
         </div>
-        <p className="mt-1 text-sm font-semibold text-zinc-500">8-week A-Level Biology series · 7pm weekly · from November</p>
+        <p className="mt-1 text-sm font-semibold text-zinc-500">A-Level Biology series · Wednesdays at 7pm · from 15 October</p>
 
         <div className="mt-5 flex flex-col gap-3">
-          {SESSIONS.map((title, i) => (
+          {SESSIONS.map((s, i) => (
             <div key={i} className="flex items-center justify-between gap-4 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-4">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-extrabold text-white">{i + 1}</span>
                 <div>
-                  <p className="font-bold text-zinc-900">{title}</p>
-                  <p className="text-xs font-semibold text-zinc-400">7pm · from November</p>
+                  <p className="font-bold text-zinc-900">{s.title}</p>
+                  <p className="text-xs font-semibold text-zinc-400">{s.date} · 7pm</p>
                 </div>
               </div>
               <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-500">Coming soon</span>
@@ -94,7 +94,7 @@ export default function TutorialsPage() {
           <div className="text-center">
             <p className="text-4xl">🎉</p>
             <h2 className="mt-3 text-2xl font-extrabold text-zinc-900">You&apos;re signed up!</h2>
-            <p className="mt-2 text-zinc-600">Thanks for registering your interest. We&apos;ll email you the schedule and joining details before sessions start in November.</p>
+            <p className="mt-2 text-zinc-600">Thanks for registering your interest. We&apos;ll email you the joining details before the sessions begin.</p>
           </div>
         ) : (
           <>
