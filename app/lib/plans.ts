@@ -33,6 +33,7 @@ export const PLANS: Plan[] = [
 
 export const FREE_PLAN_IDS = ["ocr-biology", "tutorial-recordings"];
 
+// Kept for backwards compatibility (OCR default)
 export const MODULE_TITLES: Record<string, string> = {
   M2: "Module 2 — Foundations in Biology",
   M3: "Module 3 — Exchange and Transport",
@@ -40,3 +41,30 @@ export const MODULE_TITLES: Record<string, string> = {
   M5: "Module 5 — Communication, Homeostasis and Energy",
   M6: "Module 6 — Genetics, Evolution and Ecosystems",
 };
+
+// Real module/topic names per exam board
+export const MODULE_TITLES_BY_BOARD: Record<string, Record<string, string>> = {
+  OCR: {
+    M1: "Module 1 — Development of practical skills in biology",
+    M2: "Module 2 — Foundations in biology",
+    M3: "Module 3 — Exchange and transport",
+    M4: "Module 4 — Biodiversity, evolution and disease",
+    M5: "Module 5 — Communication, homeostasis and energy",
+    M6: "Module 6 — Genetics, evolution and ecosystems",
+  },
+  AQA: {
+    M1: "Topic 1 — Biological molecules",
+    M2: "Topic 2 — Cells",
+    M3: "Topic 3 — Organisms exchange substances with their environment",
+    M4: "Topic 4 — Genetic information, variation and relationships between organisms",
+    M5: "Topic 5 — Energy transfers in and between organisms",
+    M6: "Topic 6 — Organisms respond to changes in their environments",
+    M7: "Topic 7 — Genetics, populations, evolution and ecosystems",
+    M8: "Topic 8 — The control of gene expression",
+  },
+};
+
+export function moduleTitle(board: string | null | undefined, moduleCode: string): string {
+  const b = (board || "OCR").toUpperCase();
+  return MODULE_TITLES_BY_BOARD[b]?.[moduleCode] || MODULE_TITLES[moduleCode] || moduleCode;
+}
