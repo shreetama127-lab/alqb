@@ -163,7 +163,7 @@ export default function DashboardPage() {
         {myPlans.map((plan) => {
           const qCount = countsByBoard[plan.variant] ?? 0;
           const isRecordings = plan.id === "tutorial-recordings";
-          const href = isRecordings ? "/recordings" : "/study";
+          const href = isRecordings ? "/recordings" : `/study?board=${encodeURIComponent(plan.variant)}`;
           const subtitle = isRecordings ? "Masterclass recordings" : (qCount > 0 ? `${qCount} question${qCount === 1 ? "" : "s"}` : "Coming soon");
           const action = isRecordings ? "View recordings →" : "Start studying →";
           return (
