@@ -3,23 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
+import { moduleTitle } from "@/app/lib/plans";
 
 type QRow = { id: number; topic: string | null; module: string | null; spec_code: string | null; exam_board: string | null };
 type TopicInfo = { topic: string; label: string; count: number; done: number; pct: number | null };
 type ModuleGroup = { module: string; title: string; topics: TopicInfo[]; count: number; done: number };
 
-const MODULE_TITLES: Record<string, string> = {
-  M2: "Module 2 — Foundations in Biology",
-  M3: "Module 3 — Exchange and Transport",
-  M4: "Module 4 — Biodiversity, Evolution and Disease",
-  M5: "Module 5 — Communication, Homeostasis and Energy",
-  M6: "Module 6 — Genetics, Evolution and Ecosystems",
-};
-
 const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 const YIELDS = ["High", "Medium", "Low"];
 const COUNT_PRESETS = [10, 20, 50, 100];
-const CHALLENGE_MINUTES = [5, 10, 15, 20];
 const STATUSES = [
   { value: "unattempted", label: "Unattempted" },
   { value: "correct", label: "Previously correct" },
@@ -28,6 +20,7 @@ const STATUSES = [
 
 export default function StudyPage() {
   const router = useRouter();
+  const [board, setBoard] = useState<string>("OCR");
   const [rows, setRows] = useState<QRow[]>([]);
   const [answeredIds, setAnsweredIds] = useState<Set<number>>(new Set());
   const [topicPct, setTopicPct] = useState<Record<string, number>>({});
@@ -52,7 +45,15 @@ export default function StudyPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: qData } = await supabase.from("questions").select("id, topic, module, spec_code, exam_board");
+      const params = new URLSearchParams(window.location.search);
+      const chosenBoard = params.get("board") || "OCR";
+      setBoard(chosenBoard);
+
+      const { data: qData } = await supabase
+        .from("questions")
+        .select("id, topic, module, spec_code, exam_board")
+        .eq("exam_board", chosenBoard);
+
       if (qData) {
         setRows(qData as QRow[]);
         const allTopics = Array.from(new Set((qData as QRow[]).map((r) => r.topic || "Other")));
@@ -89,7 +90,6 @@ export default function StudyPage() {
     load();
   }, []);
 
-  // spec code lookup per topic (from the questions themselves)
   const specByTopic: Record<string, string> = {};
   rows.forEach((r) => {
     const t = r.topic || "Other";
@@ -117,7 +117,7 @@ export default function StudyPage() {
     else topics = [...topics].sort((a, b) => a.label.localeCompare(b.label));
     groups.push({
       module: m,
-      title: MODULE_TITLES[m] || m,
+      title: moduleTitle(board, m),
       topics,
       count: topics.reduce((s, t) => s + t.count, 0),
       done: topics.reduce((s, t) => s + t.done, 0),
@@ -146,6 +146,7 @@ export default function StudyPage() {
 
   function launchSession() {
     const params = new URLSearchParams();
+    params.set("board", board);
     if (selectedTopics.length > 0) params.set("topics", selectedTopics.join("~~"));
     if (difficulties.length > 0) params.set("difficulties", difficulties.join("~~"));
     if (yields.length > 0) params.set("yields", yields.join("~~"));
@@ -178,7 +179,7 @@ export default function StudyPage() {
       )}
 
       <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">Choose what to study</h1>
-      <p className="mt-2 text-zinc-600">All topics are selected by default. Open a module to pick specific topics.</p>
+      <p className="mt-2 text-zinc-600">{board} Biology · all topics are selected by default. Open a module to pick specific topics.</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-sm font-semibold">
         <button onClick={selectAllTopics} className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-emerald-700 transition-colors hover:bg-emerald-50">Select all</button>
@@ -270,10 +271,13 @@ export default function StudyPage() {
                   <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} className="h-6 w-6 accent-emerald-600" />
                 </label>
                 {challenge && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {CHALLENGE_MINUTES.map((m) => (
-                      <button key={m} onClick={() => setChallengeMins(m)} className={`rounded-full px-4 py-2 text-sm font-bold transition-colors ${challengeMins === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>{m} min</button>
-                    ))}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-zinc-600">Time limit</span>
+                      <span className="text-sm font-extrabold text-emerald-700">{challengeMins} min</span>
+                    </div>
+                    <input type="range" min={1} max={60} step={1} value={challengeMins} onChange={(e) => setChallengeMins(parseInt(e.target.value, 10))} className="mt-2 w-full accent-emerald-600" />
+                    <div className="mt-1 flex justify-between text-xs text-zinc-400"><span>1 min</span><span>60 min</span></div>
                   </div>
                 )}
               </div>
