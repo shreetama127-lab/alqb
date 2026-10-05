@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { MODULE_TITLES } from "@/app/lib/plans";
+import { moduleTitle } from "@/app/lib/plans";
 
 type NoteRow = {
   question_id: number;
@@ -18,19 +18,20 @@ type NoteRow = {
 export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteRow[]>([]);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openIds, setOpenIds] = useState<Set<number>>(new Set());
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "module">("recent");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function load() {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        setLoggedIn(false);
-        setLoading(false);
-        return;
-      }
+      if (!userData.user) { setLoggedIn(false); setLoading(false); return; }
       setLoggedIn(true);
+      setUserId(userData.user.id);
 
       const { data: noteRows } = await supabase
         .from("notes")
@@ -67,84 +68,167 @@ export default function NotesPage() {
     load();
   }, []);
 
+  function toggleOpen(qid: number) {
+    setOpenIds((s) => {
+      const next = new Set(s);
+      if (next.has(qid)) next.delete(qid); else next.add(qid);
+      return next;
+    });
+  }
+
+  async function saveEdit(qid: number) {
+    if (!userId) return;
+    await supabase.from("notes").upsert({
+      user_id: userId, question_id: qid, content: editText, updated_at: new Date().toISOString(),
+    });
+    setNotes((ns) => ns.map((n) => (n.question_id === qid ? { ...n, content: editText, updated_at: new Date().toISOString() } : n)));
+    setEditId(null);
+    setEditText("");
+  }
+
+  async function deleteNote(qid: number) {
+    if (!userId || !confirm("Delete this note?")) return;
+    await supabase.from("notes").delete().eq("user_id", userId).eq("question_id", qid);
+    setNotes((ns) => ns.filter((n) => n.question_id !== qid));
+  }
+
+  function download(filename: string, rows: NoteRow[]) {
+    const lines: string[] = [];
+    lines.push("MY ALQB NOTES");
+    lines.push("Exported " + new Date().toLocaleString());
+    lines.push("=".repeat(40));
+    lines.push("");
+    rows.forEach((n) => {
+      if (n.topic) lines.push("[" + n.topic + "]");
+      lines.push("Q: " + n.stem);
+      lines.push("Note: " + n.content);
+      lines.push("(last edited " + new Date(n.updated_at).toLocaleDateString() + ")");
+      lines.push("");
+      lines.push("-".repeat(40));
+      lines.push("");
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportAll() { download("alqb-notes.txt", filteredNotes); }
+  function exportModule(mod: string, rows: NoteRow[]) { download(`alqb-notes-${mod}.txt`, rows); }
+
   if (loading)
-    return (
-      <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center px-6">
-        <p className="text-zinc-400">Loading your notes…</p>
-      </main>
-    );
+    return <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center px-6"><p className="text-zinc-400">Loading your notes…</p></main>;
 
   if (!loggedIn)
     return (
       <main className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center gap-5 px-6 text-center">
         <p className="text-lg text-zinc-600">Please log in to see your notes.</p>
-        <Link href="/login" className="rounded-full bg-emerald-700 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">
-          Log In
-        </Link>
+        <Link href="/login" className="rounded-full bg-emerald-700 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">Log In</Link>
       </main>
     );
 
+  const q = search.trim().toLowerCase();
+  const filteredNotes = q
+    ? notes.filter((n) => n.stem.toLowerCase().includes(q) || n.content.toLowerCase().includes(q) || (n.topic || "").toLowerCase().includes(q))
+    : notes;
+
+  function expandAll() { setOpenIds(new Set(filteredNotes.map((n) => n.question_id))); }
+  function collapseAll() { setOpenIds(new Set()); }
+
   function NoteCard({ n }: { n: NoteRow }) {
-    const isOpen = openId === n.question_id;
+    const isOpen = openIds.has(n.question_id);
+    const isEditing = editId === n.question_id;
+    const modLabel = n.module ? moduleTitle(n.board, n.module) : null;
     return (
       <div className="rounded-2xl border border-emerald-100 bg-white shadow-sm">
-        <button onClick={() => setOpenId(isOpen ? null : n.question_id)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
-          <span className="min-w-0">
-            {n.topic && (
-              <span className="mb-1 inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-700">
-                {n.topic}
+        <div className="flex items-center justify-between gap-3 px-5 py-4">
+          <button onClick={() => toggleOpen(n.question_id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <span className="min-w-0">
+              <span className="mb-1 flex flex-wrap items-center gap-1.5">
+                {n.board && <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-zinc-500">{n.board}</span>}
+                {n.topic && <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-700">{n.topic}</span>}
               </span>
-            )}
-            <span className="block truncate font-semibold text-zinc-800">{n.stem}</span>
-          </span>
-          <span className="shrink-0 text-emerald-600">{isOpen ? "▴" : "▾"}</span>
-        </button>
+              <span className="block truncate font-semibold text-zinc-800">{n.stem}</span>
+              {modLabel && <span className="mt-0.5 block truncate text-xs font-semibold text-zinc-400">{modLabel}</span>}
+            </span>
+          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button onClick={() => { setEditId(n.question_id); setEditText(n.content); setOpenIds((s) => new Set(s).add(n.question_id)); }} title="Edit" className="rounded-full px-2 py-1 text-sm text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-700">✏️</button>
+            <button onClick={() => deleteNote(n.question_id)} title="Delete" className="rounded-full px-2 py-1 text-sm text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500">🗑️</button>
+            <button onClick={() => toggleOpen(n.question_id)} className="px-1 text-emerald-600">{isOpen ? "▴" : "▾"}</button>
+          </div>
+        </div>
         {isOpen && (
           <div className="border-t border-zinc-100 px-5 py-4">
-            <p className="whitespace-pre-wrap text-sm text-zinc-600">{n.content}</p>
-            <p className="mt-3 text-xs text-zinc-400">
-              Last edited {new Date(n.updated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-            </p>
+            {isEditing ? (
+              <div>
+                <textarea value={editText} onChange={(e) => setEditText(e.target.value)} className="h-28 w-full resize-none rounded-xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400" />
+                <div className="mt-2 flex gap-2">
+                  <button onClick={() => saveEdit(n.question_id)} className="rounded-full bg-emerald-700 px-5 py-1.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800">Save</button>
+                  <button onClick={() => { setEditId(null); setEditText(""); }} className="rounded-full border border-zinc-200 px-5 py-1.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-50">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="whitespace-pre-wrap text-sm text-zinc-600">{n.content}</p>
+                <p className="mt-3 text-xs text-zinc-400">Last edited {new Date(n.updated_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</p>
+              </>
+            )}
           </div>
         )}
       </div>
     );
   }
 
-  const groups: { key: string; title: string; notes: NoteRow[] }[] = [];
-  if (sortBy === "module") {
-    const map: Record<string, NoteRow[]> = {};
-    notes.forEach((n) => {
-      const key = `${n.board || "OCR"}|${n.module || "Other"}`;
-      if (!map[key]) map[key] = [];
-      map[key].push(n);
-    });
-    Object.keys(map)
-      .sort()
-      .forEach((key) => {
-        const [board, mod] = key.split("|");
-        groups.push({
-          key,
-          title: `${board} · ${MODULE_TITLES[mod] || mod}`,
-          notes: map[key],
-        });
-      });
-  }
+  const groups: { key: string; mod: string; title: string; notes: NoteRow[] }[] = [];
+  const map: Record<string, NoteRow[]> = {};
+  filteredNotes.forEach((n) => {
+    const key = `${n.board || "OCR"}|${n.module || "Other"}`;
+    if (!map[key]) map[key] = [];
+    map[key].push(n);
+  });
+  Object.keys(map).sort().forEach((key) => {
+    const [board, mod] = key.split("|");
+    groups.push({ key, mod, title: `${board} · ${moduleTitle(board, mod)}`, notes: map[key] });
+  });
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">My notes</h1>
-      <p className="mt-2 text-zinc-500">Click a note to expand it.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">My notes</h1>
+          <p className="mt-2 text-zinc-500">Click a note to expand, edit or delete it.</p>
+        </div>
+        {notes.length > 0 && (
+          <button onClick={exportAll} className="rounded-full border border-emerald-200 bg-white px-5 py-2.5 font-bold text-emerald-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400">
+            ⬇ Export notes
+          </button>
+        )}
+      </div>
 
       {notes.length > 0 && (
-        <div className="mt-6 flex gap-2 text-sm font-semibold">
-          <button onClick={() => setSortBy("recent")} className={`rounded-full px-4 py-2 transition-colors ${sortBy === "recent" ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-            Newest first
-          </button>
-          <button onClick={() => setSortBy("module")} className={`rounded-full px-4 py-2 transition-colors ${sortBy === "module" ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>
-            By subject &amp; module
-          </button>
-        </div>
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Search your notes…"
+            className="mt-6 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400"
+          />
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <button onClick={() => setSortBy("recent")} className={`rounded-full px-4 py-2 transition-colors ${sortBy === "recent" ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>Newest first</button>
+            <button onClick={() => setSortBy("module")} className={`rounded-full px-4 py-2 transition-colors ${sortBy === "module" ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-emerald-50"}`}>By subject &amp; module</button>
+            <span className="mx-1 text-zinc-300">|</span>
+            <button onClick={expandAll} className="rounded-full border border-zinc-200 px-4 py-2 text-zinc-600 transition-colors hover:bg-emerald-50">Expand all</button>
+            <button onClick={collapseAll} className="rounded-full border border-zinc-200 px-4 py-2 text-zinc-600 transition-colors hover:bg-emerald-50">Collapse all</button>
+          </div>
+        </>
       )}
 
       {notes.length === 0 ? (
@@ -153,22 +237,27 @@ export default function NotesPage() {
           <h2 className="mt-4 text-xl font-bold text-zinc-900">No notes yet</h2>
           <p className="mt-2 text-zinc-500">Write notes on questions during a study session and they&apos;ll appear here.</p>
         </div>
+      ) : filteredNotes.length === 0 ? (
+        <p className="mt-10 rounded-2xl border border-zinc-100 bg-white p-8 text-center text-zinc-400">No notes match &ldquo;{search}&rdquo;.</p>
       ) : sortBy === "recent" ? (
         <div className="mt-8 flex flex-col gap-3">
-          {notes.map((n) => (
-            <NoteCard key={n.question_id} n={n} />
-          ))}
+          {filteredNotes.map((n) => (<NoteCard key={n.question_id} n={n} />))}
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-8">
           {groups.map((g) => (
             <div key={g.key}>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">{g.title}</h2>
-              <p className="mt-0.5 text-xs font-semibold text-zinc-400">{g.notes.length} note{g.notes.length === 1 ? "" : "s"}</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-400">{g.title}</h2>
+                  <p className="mt-0.5 text-xs font-semibold text-zinc-400">{g.notes.length} note{g.notes.length === 1 ? "" : "s"}</p>
+                </div>
+                <button onClick={() => exportModule(g.mod, g.notes)} className="rounded-full border border-emerald-200 bg-white px-4 py-1.5 text-xs font-bold text-emerald-700 transition-colors hover:border-emerald-400">
+                  ⬇ Export this module
+                </button>
+              </div>
               <div className="mt-3 flex flex-col gap-3">
-                {g.notes.map((n) => (
-                  <NoteCard key={n.question_id} n={n} />
-                ))}
+                {g.notes.map((n) => (<NoteCard key={n.question_id} n={n} />))}
               </div>
             </div>
           ))}
@@ -176,9 +265,7 @@ export default function NotesPage() {
       )}
 
       <div className="mt-10 flex justify-center">
-        <Link href="/dashboard" className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300">
-          ← Back to dashboard
-        </Link>
+        <Link href="/dashboard" className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 font-bold text-zinc-700 transition-all hover:-translate-y-0.5 hover:border-emerald-300">← Back to dashboard</Link>
       </div>
     </main>
   );
