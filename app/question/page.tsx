@@ -63,7 +63,7 @@ function topicLabel(q: Question) {
 function ExplanationText({ text }: { text: string }) {
   const paras = paragraphs(text);
   return (
-    <div className="mt-2 flex flex-col gap-2 text-base text-zinc-700">
+    <div className="mt-2 flex flex-col gap-2 text-sm text-zinc-700">
       {paras.map((p, i) => (<p key={i}>{p}</p>))}
     </div>
   );
@@ -79,7 +79,7 @@ function TakeawayText({ text }: { text: string }) {
         return isHeading ? (
           <p key={i} className="mt-2 text-xs font-bold uppercase tracking-wide text-indigo-700">{line}</p>
         ) : (
-          <p key={i} className="text-base leading-relaxed text-zinc-700">{line}</p>
+          <p key={i} className="text-sm leading-relaxed text-zinc-700">{line}</p>
         );
       })}
     </div>
@@ -106,7 +106,6 @@ export default function QuestionPage() {
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [noteSaved, setNoteSaved] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
-  const [showTimer, setShowTimer] = useState(false);
   const [showNotesReview, setShowNotesReview] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finalTime, setFinalTime] = useState(0);
@@ -124,6 +123,7 @@ export default function QuestionPage() {
         const v = params.get(key);
         return v ? v.split("~~").filter(Boolean) : [];
       };
+      const chosenBoard = params.get("board");
       const chosenTopics = split("topics");
       const chosenModules = split("modules");
       const chosenDiffs = split("difficulties");
@@ -137,6 +137,7 @@ export default function QuestionPage() {
       let query = supabase
         .from("questions")
         .select("id, question_ref, exam_board, spec_code, stem, topic, key_takeaway, options, resources");
+      if (chosenBoard) query = query.eq("exam_board", chosenBoard);
       if (chosenTopics.length > 0) query = query.in("topic", chosenTopics);
       if (chosenModules.length > 0) query = query.in("module", chosenModules);
       if (chosenDiffs.length > 0) query = query.in("difficulty", chosenDiffs);
@@ -192,13 +193,15 @@ export default function QuestionPage() {
 
       if (challengeParam) {
         const mins = parseInt(challengeParam, 10);
-        if (!isNaN(mins)) { setIsChallenge(true); setMinutes(mins); setTimed(true); setElapsed(0); setShowTimer(true); }
+        if (!isNaN(mins)) { setIsChallenge(true); setMinutes(mins); setTimed(true); setElapsed(0); }
       } else {
         const limit = limitParam ? parseInt(limitParam, 10) : 0;
         if (limit > 0) list = list.slice(0, limit);
       }
 
       setQuestions(list);
+      // Elapsed timer always runs for every session
+      setTimed(true);
 
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user && list.length > 0) {
@@ -212,6 +215,11 @@ export default function QuestionPage() {
         const fmap: Record<number, "up" | "down"> = {};
         (rateRows || []).forEach((r) => { fmap[r.question_id] = r.rating === 1 ? "up" : "down"; });
         setFeedback(fmap);
+
+        const { data: flagRows } = await supabase.from("flags").select("question_id").eq("user_id", userData.user.id).in("question_id", ids);
+        const flmap: Record<number, boolean> = {};
+        (flagRows || []).forEach((f) => { if (f.question_id) flmap[f.question_id] = true; });
+        setFlagged(flmap);
 
         const { data: cardRows } = await supabase.from("flashcards").select("question_id").eq("user_id", userData.user.id).in("question_id", ids);
         const cmap: Record<number, boolean> = {};
@@ -276,11 +284,10 @@ export default function QuestionPage() {
   const correctCount = Object.values(answers).filter((a) => a.correct).length;
   const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
   const progress = Math.round(((index + 1) / questions.length) * 100);
-  const deckCorrectPct = Math.round((correctCount / questions.length) * 100);
 
   const totalTime = minutes * 60;
   const remaining = totalTime - elapsed;
-  const timeUp = timed && remaining <= 0;
+  const timeUp = isChallenge && remaining <= 0;
   const showTimeUpPopup = timeUp && !dismissedTimeUp && !finished;
 
   const notesList = questions.filter((qq) => (notes[qq.id] || "").trim().length > 0).map((qq) => ({ stem: qq.stem, topic: qq.topic, content: notes[qq.id] }));
@@ -376,7 +383,6 @@ export default function QuestionPage() {
       </main>
     );
   }
-  function stopTimed() { setTimed(false); setPaused(false); setElapsed(0); }
   function chooseOption(letter: string) { if (!submitted) setPending(letter); }
 
   function onNoteChange(text: string) {
@@ -430,11 +436,16 @@ export default function QuestionPage() {
     if (Object.keys(updated).length === questions.length) { setFinalTime(elapsed); setFinished(true); saveSet(updated); }
   }
 
-  async function flagQuestion() {
+  async function toggleFlag() {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) { alert("Please log in to flag a question."); return; }
-    const { error } = await supabase.from("flags").insert({ user_id: userData.user.id, question_id: q.id });
-    if (!error) setFlagged((f) => ({ ...f, [q.id]: true }));
+    if (flagged[q.id]) {
+      const { error } = await supabase.from("flags").delete().eq("user_id", userData.user.id).eq("question_id", q.id);
+      if (!error) setFlagged((f) => ({ ...f, [q.id]: false }));
+    } else {
+      const { error } = await supabase.from("flags").insert({ user_id: userData.user.id, question_id: q.id });
+      if (!error) setFlagged((f) => ({ ...f, [q.id]: true }));
+    }
   }
 
   async function giveFeedback(kind: "up" | "down") {
@@ -465,9 +476,8 @@ export default function QuestionPage() {
           <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
             <p className="text-5xl">⏰</p>
             <h2 className="mt-4 text-2xl font-extrabold text-zinc-900">Time&apos;s up!</h2>
-            <p className="mt-2 text-zinc-600">You answered {answeredCount} of {questions.length} questions.{isChallenge ? " Great effort!" : " Keep going, or finish and see your results?"}</p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              {!isChallenge && <button onClick={() => setDismissedTimeUp(true)} className="rounded-full border-2 border-emerald-200 bg-white px-6 py-3 font-bold text-emerald-700 transition-all hover:-translate-y-0.5 hover:border-emerald-400">Keep going</button>}
+            <p className="mt-2 text-zinc-600">You answered {answeredCount} of {questions.length} questions. Great effort!</p>
+            <div className="mt-6 flex justify-center">
               <button onClick={endSession} className="rounded-full bg-emerald-700 px-8 py-3 font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">See results</button>
             </div>
           </div>
@@ -483,7 +493,7 @@ export default function QuestionPage() {
             </div>
             <p className="mt-1 text-xs font-semibold text-zinc-400">Question {refCode(q)}</p>
             {reportSent ? (
-              <p className="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">Thanks — your report has been sent. 🙏</p>
+              <p className="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">Thanks, your report has been sent. 🙏</p>
             ) : (
               <>
                 <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} placeholder="What's wrong with this question?" className="mt-4 h-28 w-full resize-none rounded-xl border border-zinc-200 px-4 py-3 text-sm text-zinc-800 outline-none focus:border-emerald-400" />
@@ -499,13 +509,9 @@ export default function QuestionPage() {
           <p className="text-base font-bold uppercase tracking-wide text-emerald-700">Q{index + 1} of {questions.length}</p>
           <div className="flex items-center gap-2">
             {answeredCount > 0 && <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">{accuracy}%</span>}
-            {timed ? (
-              <span className={`rounded-full px-3 py-1 text-sm font-bold ${timeUp ? "bg-amber-100 text-amber-700" : remaining <= 60 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
-                {timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}
-              </span>
-            ) : (
-              <button onClick={() => setShowTimer((s) => !s)} className="rounded-full border border-emerald-200 px-3 py-1 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-50">⏱ Timer</button>
-            )}
+            <span className={`rounded-full px-3 py-1 text-sm font-bold ${isChallenge && remaining <= 60 ? "bg-red-100 text-red-700" : "bg-zinc-100 text-zinc-600"}`}>
+              ⏱ {isChallenge ? (timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)) : fmt(elapsed)}
+            </span>
           </div>
         </div>
 
@@ -513,35 +519,18 @@ export default function QuestionPage() {
           <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${progress}%` }} />
         </div>
 
-        {(showTimer || timed) && (
-          <div className="mt-3 flex items-center justify-between rounded-2xl border border-emerald-100 bg-white p-3 shadow-sm">
-            {timed ? (
-              <>
-                <div className="text-center"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Elapsed</p><p className="text-lg font-extrabold text-zinc-700">{fmt(elapsed)}</p></div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setPaused((p) => !p)} className={`rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${paused ? "bg-emerald-700 text-white hover:bg-emerald-800" : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>{paused ? "▶ Resume" : "⏸ Pause"}</button>
-                  {!isChallenge && <button onClick={() => { stopTimed(); setShowTimer(false); }} className="rounded-full border border-zinc-200 px-3 py-1.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-zinc-50">End</button>}
-                </div>
-                <div className="text-center"><p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{timeUp ? "Overtime" : paused ? "Paused" : "Left"}</p><p className={`text-lg font-extrabold ${timeUp ? "text-amber-600" : remaining <= 60 ? "text-red-600" : "text-emerald-700"}`}>{timeUp ? "+" + fmt(elapsed - totalTime) : fmt(remaining)}</p></div>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-semibold text-zinc-600">Time limit:</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[10, 20, 30, 45, 60].map((m) => (<button key={m} onClick={() => setMinutes(m)} className={`rounded-full px-2.5 py-1.5 text-sm font-bold transition-colors ${minutes === m ? "bg-emerald-700 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}>{m}m</button>))}
-                  <button onClick={() => { setElapsed(0); setPaused(false); setDismissedTimeUp(false); setTimed(true); }} className="ml-1 rounded-full bg-emerald-700 px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800">Start</button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        {/* Back / forward navigation */}
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <button onClick={prevQuestion} disabled={index === 0} className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">← Previous</button>
+          <button onClick={() => { if (index + 1 < questions.length) goToQuestion(index + 1); }} disabled={index + 1 >= questions.length} className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-sm font-semibold text-zinc-600 transition-colors hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">Next →</button>
+        </div>
 
         <div className="mt-4 rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-7">
           <div className="mb-3 flex items-center justify-between gap-3">
             {q.topic ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">{topicLabel(q)}</span> : <span />}
-            <button onClick={flagQuestion} disabled={isFlagged} title="Flag this question for review" className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors ${isFlagged ? "border-red-200 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>{isFlagged ? "⚑ Flagged" : "⚑ Flag"}</button>
+            <button onClick={toggleFlag} title="Flag this question for review" className={`shrink-0 rounded-full border px-3 py-1 text-sm font-semibold transition-colors ${isFlagged ? "border-red-300 bg-red-50 text-red-500" : "border-zinc-200 text-zinc-400 hover:border-red-300 hover:text-red-500"}`}>{isFlagged ? "⚑ Flagged (tap to remove)" : "⚑ Flag"}</button>
           </div>
-          <h2 className="text-2xl font-bold leading-snug text-zinc-900 sm:text-3xl">{q.stem}</h2>
+          <h2 className="text-xl font-bold leading-snug text-zinc-900 sm:text-2xl">{q.stem}</h2>
 
           <div className="mt-5 flex flex-col gap-3">
             {q.options.map((option) => {
@@ -555,7 +544,7 @@ export default function QuestionPage() {
               const pickCount = thisPicks ? (thisPicks[option.text] || 0) : 0;
               const pickPct = totalPicks >= 3 ? Math.round((pickCount / totalPicks) * 100) : null;
               return (
-                <div key={option.letter} className={`rounded-2xl border-2 px-5 py-4 text-lg transition-all sm:text-xl ${style}`}>
+                <div key={option.letter} className={`rounded-2xl border-2 px-4 py-3 text-base transition-all sm:text-lg ${style}`}>
                   <button onClick={() => chooseOption(option.letter)} className="flex w-full items-center justify-between gap-3 text-left text-zinc-900" disabled={submitted}>
                     <span><span className="font-bold text-emerald-700">{option.letter}.</span> {option.text}</span>
                     {submitted && pickPct !== null && (
@@ -565,7 +554,7 @@ export default function QuestionPage() {
                   {submitted && (isPicked || option.correct) && <ExplanationText text={option.explanation} />}
                   {submitted && !isPicked && !option.correct && (
                     <div className="mt-2">
-                      <button onClick={() => toggleExplain(option.letter)} className="text-base font-semibold text-emerald-700 hover:text-emerald-900">{revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}</button>
+                      <button onClick={() => toggleExplain(option.letter)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-900">{revealOpen ? "Hide explanation ▴" : "Show explanation ▾"}</button>
                       {revealOpen && <ExplanationText text={option.explanation} />}
                     </div>
                   )}
@@ -589,11 +578,11 @@ export default function QuestionPage() {
           )}
 
           <div className="mt-6 flex items-center justify-between gap-3 border-t border-zinc-100 pt-5">
-            <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-5 py-2.5 font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300 sm:px-6">Finish</button>
+            <button onClick={endSession} className="rounded-full border-2 border-zinc-200 bg-white px-8 py-3 text-lg font-bold text-zinc-600 transition-all hover:-translate-y-0.5 hover:border-emerald-300">Finish</button>
             {!submitted ? (
-              <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none sm:px-10">Submit</button>
+              <button onClick={submitAnswer} disabled={pending === null} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none">Submit</button>
             ) : (
-              <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800 sm:px-10">{index + 1 < questions.length ? "Next →" : "Finish →"}</button>
+              <button onClick={nextQuestion} className="rounded-full bg-emerald-700 px-8 py-3 text-lg font-bold text-white shadow-lg shadow-emerald-700/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-800">{index + 1 < questions.length ? "Next →" : "Finish →"}</button>
             )}
           </div>
 
@@ -632,15 +621,15 @@ export default function QuestionPage() {
 
       <aside className="lg:w-72">
         <div className="lg:sticky lg:top-24">
+          {answeredCount > 0 && (
+            <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-center text-base font-bold text-emerald-800">{accuracy}% correct so far</p>
+          )}
           <button onClick={() => setShowPanel((s) => !s)} className="mb-3 w-full rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50">
-            {showPanel ? "▾ Hide question list" : "▸ Show question list"}
+            {showPanel ? "▾ Hide question menu" : "▸ Show question menu"}
           </button>
           {showPanel && (
             <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
-              {answeredCount > 0 && (
-                <p className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-center text-base font-bold text-emerald-800">{accuracy}%</p>
-              )}
-              <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Questions</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-400">Question menu</h3>
               <div className="mt-4 flex max-h-[50vh] flex-col gap-2 overflow-y-auto pr-1">
                 {questions.map((qq, i) => {
                   const a = answers[i];
@@ -650,7 +639,7 @@ export default function QuestionPage() {
                   let dot = "bg-zinc-200";
                   if (a) dot = a.correct ? "bg-emerald-500" : "bg-red-400";
                   return (
-                    <button key={i} onClick={() => { goToQuestion(i); setShowPanel(false); }} className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors ${isCurrent ? "bg-emerald-50 font-bold text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"}`}>
+                    <button key={i} onClick={() => goToQuestion(i)} className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors ${isCurrent ? "bg-emerald-50 font-bold text-emerald-800" : "text-zinc-600 hover:bg-zinc-50"}`}>
                       <span className="flex items-center gap-1.5">Question {i + 1}{qFlagged && <span className="text-red-500">⚑</span>}{hasNote && <span className="text-emerald-600">📝</span>}</span>
                       <span className={`h-3.5 w-3.5 rounded-full ${dot}`} />
                     </button>
