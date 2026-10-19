@@ -5,14 +5,14 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 
 const SESSIONS = [
-  { title: "Biological Molecules & Cell Biology Foundations", date: "Wed 15 October" },
-  { title: "Membranes, Transport & Exchange", date: "Wed 22 October" },
-  { title: "DNA, Genetics & Cell Division", date: "Wed 29 October" },
-  { title: "Biodiversity, Classification & Evolution", date: "Wed 5 November" },
-  { title: "Physiology: Transport Systems in Animals & Plants", date: "Wed 12 November" },
-  { title: "Homeostasis, Communication & Coordination", date: "Wed 19 November" },
-  { title: "Photosynthesis, Respiration & Metabolism", date: "Wed 26 November" },
-  { title: "Ecology, Populations, Biotechnology & Exam Mastery", date: "Wed 3 December" },
+  { title: "Biological Molecules & Cell Biology Foundations", date: "Wed 28 October" },
+  { title: "Membranes, Transport & Exchange", date: "Wed 4 November" },
+  { title: "DNA, Genetics & Cell Division", date: "Wed 11 November" },
+  { title: "Biodiversity, Classification & Evolution", date: "Wed 18 November" },
+  { title: "Physiology: Transport Systems in Animals & Plants", date: "Wed 25 November" },
+  { title: "Homeostasis, Communication & Coordination", date: "Wed 2 December" },
+  { title: "Photosynthesis, Respiration & Metabolism", date: "Wed 9 December" },
+  { title: "Ecology, Populations, Biotechnology & Exam Mastery", date: "Wed 16 December" },
 ];
 
 export default function TutorialsPage() {
@@ -71,7 +71,7 @@ export default function TutorialsPage() {
           <span className="text-2xl">📚</span>
           <h2 className="text-2xl font-extrabold text-zinc-900">Upcoming sessions</h2>
         </div>
-        <p className="mt-1 text-sm font-semibold text-zinc-500">A-Level Biology series · Wednesdays at 7pm · from 15 October</p>
+        <p className="mt-1 text-sm font-semibold text-zinc-500">A-Level Biology series · Wednesdays at 7pm · from 28 October</p>
 
         <div className="mt-5 flex flex-col gap-3">
           {SESSIONS.map((s, i) => (
