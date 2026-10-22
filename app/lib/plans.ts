@@ -31,7 +31,7 @@ export const PLANS: Plan[] = [
   { id: "tutorial-recordings", qualification: "A-Level", subject: "Tutorials", variant: "Recordings", title: "Tutorial Recordings", emoji: "🎥", live: true },
 ];
 
-export const FREE_PLAN_IDS = ["ocr-biology", "tutorial-recordings"];
+export const FREE_PLAN_IDS = ["tutorial-recordings"];
 
 // Kept for backwards compatibility (OCR default)
 export const MODULE_TITLES: Record<string, string> = {
