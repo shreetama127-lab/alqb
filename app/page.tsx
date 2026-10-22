@@ -128,8 +128,11 @@ export default function Home() {
             Master A-Level Biology &amp; Chemistry.
           </h1>
           <p className="mt-5 text-lg text-zinc-600">
-            Exam-board specific questions with instant explanations, timed practice, and progress tracking.
+            Exam-board specific questions with instant explanations, timed practice, and progress tracking — built for A-Level students, with IB Biology on the way.
           </p>
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+            🌍 IB students welcome — IB Biology question banks are coming soon.
+          </div>
         </div>
 
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 shadow-lg shadow-emerald-700/5">
@@ -201,8 +204,8 @@ export default function Home() {
       <div className="mt-16 grid gap-5 sm:grid-cols-3">
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">📚</p>
-          <h3 className="mt-4 text-lg font-bold text-zinc-900">Exam-board specific</h3>
-          <p className="mt-2 text-sm text-zinc-600">Mapped to your spec.</p>
+          <h3 className="mt-4 text-lg font-bold text-zinc-900">Spec-specific</h3>
+          <p className="mt-2 text-sm text-zinc-600">Mapped to your exam board or IB syllabus.</p>
         </div>
         <div className="rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-sm">
           <p className="text-4xl">💡</p>
