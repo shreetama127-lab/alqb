@@ -49,19 +49,30 @@ export default function StudyPage() {
       const chosenBoard = params.get("board") || "OCR";
       setBoard(chosenBoard);
 
-      const { data: qData } = await supabase
-        .from("questions")
-        .select("id, topic, module, spec_code, exam_board")
-        .eq("exam_board", chosenBoard);
-
-      if (qData) {
-        setRows(qData as QRow[]);
-        const allTopics = Array.from(new Set((qData as QRow[]).map((r) => r.topic || "Other")));
-        setSelectedTopics(allTopics);
+      // Fetch ALL questions for this board in batches (Supabase caps at 1000 per request)
+      const allRows: QRow[] = [];
+      let from = 0;
+      const batch = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from("questions")
+          .select("id, topic, module, spec_code, exam_board")
+          .eq("exam_board", chosenBoard)
+          .order("id", { ascending: true })
+          .range(from, from + batch - 1);
+        if (!data || data.length === 0) break;
+        allRows.push(...(data as QRow[]));
+        if (data.length < batch) break;
+        from += batch;
       }
+      const qData = allRows;
+
+      setRows(qData);
+      const allTopics = Array.from(new Set(qData.map((r) => r.topic || "Other")));
+      setSelectedTopics(allTopics);
 
       const { data: userData } = await supabase.auth.getUser();
-      if (userData.user && qData) {
+      if (userData.user && qData.length > 0) {
         const { data: ans } = await supabase
           .from("answers")
           .select("is_correct, question_id, created_at")
