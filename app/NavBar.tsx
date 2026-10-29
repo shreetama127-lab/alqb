@@ -46,6 +46,7 @@ export default function NavBar() {
           <span className="text-2xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
         </Link>
 
+        {/* Desktop links */}
         <div className="hidden items-center gap-1 md:flex">
           {loggedIn ? (
             <>
@@ -60,23 +61,25 @@ export default function NavBar() {
           ) : null}
         </div>
 
+        {/* Mobile: avatar always visible + hamburger */}
         {loggedIn !== null && (
-          <button
-            onClick={() => setMenuOpen((o) => !o)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-emerald-700 transition-colors hover:bg-emerald-50 md:hidden"
-            aria-label="Menu"
-          >
-            <span className="text-3xl leading-none">{menuOpen ? "×" : "☰"}</span>
-          </button>
+          <div className="flex items-center gap-2 md:hidden">
+            <AuthButton />
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-emerald-700 transition-colors hover:bg-emerald-50"
+              aria-label="Menu"
+            >
+              <span className="text-3xl leading-none">{menuOpen ? "×" : "☰"}</span>
+            </button>
+          </div>
         )}
       </div>
 
+      {/* Mobile dropdown: nav links only */}
       {menuOpen && loggedIn !== null && (
         <div className="flex flex-col gap-1 border-t border-emerald-100 px-5 py-3 md:hidden">
           {loggedIn ? loggedInLinks : loggedOutLinks}
-          <div className="mt-2" onClick={() => setMenuOpen(false)}>
-            <AuthButton />
-          </div>
         </div>
       )}
     </nav>
