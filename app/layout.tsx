@@ -7,8 +7,21 @@ import { Analytics } from "@vercel/analytics/next";
 const nunito = Nunito({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ALQB — A-Level Question Bank",
-  description: "Exam-board specific question banks for A-Level Biology & Chemistry.",
+  metadataBase: new URL("https://www.alqb.co.uk"),
+  title: {
+    default: "ALQB — A-Level Biology & Chemistry Question Bank (OCR, AQA, IB)",
+    template: "%s | ALQB",
+  },
+  description:
+    "Practice exam-board specific A-Level Biology and Chemistry questions with instant explanations, timed challenges, flashcards and progress tracking. OCR and AQA question banks, with IB Biology coming soon.",
+  keywords: ["A-Level Biology", "A-Level Chemistry", "OCR Biology", "AQA Biology", "IB Biology", "Biology revision", "A-Level Biology questions", "exam practice", "question bank"],
+  openGraph: {
+    title: "ALQB — A-Level Biology & Chemistry Question Bank",
+    description: "Exam-board specific A-Level Biology & Chemistry practice questions with explanations, flashcards and progress tracking.",
+    url: "https://www.alqb.co.uk",
+    siteName: "ALQB",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
