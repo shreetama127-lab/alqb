@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
+import AnimatedLogo from "./AnimatedLogo";
 
 export default function Home() {
   const [mode, setMode] = useState<"login" | "signup">("signup");
@@ -121,7 +122,7 @@ export default function Home() {
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
         <div>
           <div className="flex flex-col items-start gap-6">
-            <img src="/logo.png" alt="ALQB logo" className="h-52 w-auto" />
+            <AnimatedLogo />
             <span className="text-6xl font-extrabold tracking-tight text-emerald-700">ALQB</span>
           </div>
           <h1 className="mt-10 text-4xl font-extrabold leading-tight text-zinc-900">
