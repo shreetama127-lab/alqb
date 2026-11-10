@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
-import { PLANS, FREE_PLAN_IDS } from "@/app/lib/plans";
+import { PLANS } from "@/app/lib/plans";
+import { accessiblePlanIds, isFounder, trialActive, trialHoursLeft } from "@/app/lib/access";
 import Heatmap from "@/app/Heatmap";
 import ProgressGraph from "@/app/ProgressGraph";
 
@@ -17,6 +18,8 @@ export default function DashboardPage() {
   const [noteCount, setNoteCount] = useState(0);
   const [setCount, setSetCount] = useState(0);
   const [activeIds, setActiveIds] = useState<string[]>([]);
+  const [trialOn, setTrialOn] = useState(false);
+  const [hoursLeft, setHoursLeft] = useState(0);
   const [examDate, setExamDate] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState("");
   const [savingDate, setSavingDate] = useState(false);
@@ -46,9 +49,18 @@ export default function DashboardPage() {
       const { count: sCount } = await supabase.from("question_sets").select("id", { count: "exact", head: true }).eq("user_id", userData.user.id);
       if (sCount) setSetCount(sCount);
 
-      const { data: subs } = await supabase.from("subscriptions").select("plan_id, status").eq("user_id", userData.user.id).eq("status", "active");
-      const owned = (subs || []).map((s) => s.plan_id);
-      setActiveIds([...new Set([...owned, ...FREE_PLAN_IDS])]);
+      const { data: subs } = await supabase.from("subscriptions").select("plan_id, status, expires_at").eq("user_id", userData.user.id).eq("status", "active");
+      const now = Date.now();
+      const owned = (subs || [])
+        .filter((s) => !s.expires_at || new Date(s.expires_at).getTime() > now)
+        .map((s) => s.plan_id);
+
+      const email = userData.user.email;
+      const createdAt = userData.user.created_at;
+      const founder = isFounder(email);
+      setActiveIds(accessiblePlanIds({ email, createdAt, ownedPlanIds: owned }));
+      setTrialOn(!founder && trialActive(createdAt));
+      setHoursLeft(founder ? 0 : trialHoursLeft(createdAt));
 
       const { data: ans } = await supabase.from("answers").select("created_at").eq("user_id", userData.user.id);
       if (ans && ans.length > 0) {
@@ -129,6 +141,13 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">Welcome back, <span className="text-emerald-700">{firstName}</span></h1>
         <p className="mt-2 text-lg text-zinc-600">What would you like to study today?</p>
       </div>
+
+      {trialOn && (
+        <Link href="/subscriptions" className="mt-6 block rounded-2xl border-2 border-amber-300 bg-amber-50 px-5 py-4 transition-all hover:-translate-y-0.5 hover:border-amber-400">
+          <p className="font-bold text-amber-900">🎉 Free trial — {hoursLeft}h left</p>
+          <p className="mt-1 text-sm text-amber-800">You have full access to every bank right now. Tap to choose a plan and keep access after your trial ends →</p>
+        </Link>
+      )}
 
       <div className="mt-6 grid grid-cols-3 gap-3 sm:gap-4">
         <Link href="/notes" className="flex flex-col justify-center rounded-2xl border border-emerald-200 bg-white px-3 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 sm:px-6 sm:py-4">

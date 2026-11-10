@@ -10,26 +10,22 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// How long each term grants access for
-function expiryFor(term: string): string {
+// How long each term grants access for.
+// Returns null for lifetime (never expires).
+function expiryFor(term: string): string | null {
   const now = new Date();
   switch (term) {
     case "1month":
       now.setMonth(now.getMonth() + 1);
       break;
-    case "6months":
-      now.setMonth(now.getMonth() + 6);
+    case "3months":
+      now.setMonth(now.getMonth() + 3);
       break;
-    case "1year":
-      now.setFullYear(now.getFullYear() + 1);
-      break;
-    case "exam":
-      // "Until my exam" — grant until end of the next August (covers the exam season)
-      now.setFullYear(now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear());
-      now.setMonth(7, 31); // 31 August
-      break;
+    case "lifetime":
+      return null;
     default:
-      now.setFullYear(now.getFullYear() + 1);
+      // Unknown term — grant 1 month to be safe.
+      now.setMonth(now.getMonth() + 1);
   }
   return now.toISOString();
 }
@@ -50,7 +46,7 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId;
     const planId = session.metadata?.planId;
-    const term = session.metadata?.term || "1year";
+    const term = session.metadata?.term || "1month";
 
     if (userId && planId) {
       const { error } = await supabaseAdmin.from("subscriptions").insert({

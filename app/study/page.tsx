@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { moduleTitle } from "@/app/lib/plans";
+import { accessiblePlanIds } from "@/app/lib/access";
 
 type QRow = { id: number; topic: string | null; module: string | null; spec_code: string | null; exam_board: string | null };
 type TopicInfo = { topic: string; label: string; count: number; done: number; pct: number | null };
@@ -49,6 +50,28 @@ export default function StudyPage() {
       const chosenBoard = params.get("board") || "OCR";
       setBoard(chosenBoard);
 
+      // Must be logged in
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) { router.replace("/login"); return; }
+
+      // Access gate: can this user use this board?
+      const planId = `${chosenBoard.toLowerCase()}-biology`;
+      const { data: accessSubs } = await supabase
+        .from("subscriptions")
+        .select("plan_id, expires_at")
+        .eq("user_id", userData.user.id)
+        .eq("status", "active");
+      const nowMs = Date.now();
+      const owned = (accessSubs || [])
+        .filter((s) => !s.expires_at || new Date(s.expires_at).getTime() > nowMs)
+        .map((s) => s.plan_id);
+      const accessible = accessiblePlanIds({
+        email: userData.user.email,
+        createdAt: userData.user.created_at,
+        ownedPlanIds: owned,
+      });
+      if (!accessible.includes(planId)) { router.replace("/subscriptions"); return; }
+
       // Fetch ALL questions for this board in batches (Supabase caps at 1000 per request)
       const allRows: QRow[] = [];
       let from = 0;
@@ -71,8 +94,7 @@ export default function StudyPage() {
       const allTopics = Array.from(new Set(qData.map((r) => r.topic || "Other")));
       setSelectedTopics(allTopics);
 
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user && qData.length > 0) {
+      if (qData.length > 0) {
         const { data: ans } = await supabase
           .from("answers")
           .select("is_correct, question_id, created_at")
@@ -99,7 +121,7 @@ export default function StudyPage() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [router]);
 
   const specByTopic: Record<string, string> = {};
   rows.forEach((r) => {

@@ -16,9 +16,8 @@ export type Plan = {
 
 export const PRICE_OPTIONS: PriceOption[] = [
   { id: "1month", label: "1 month", price: "£20" },
-  { id: "6months", label: "6 months", price: "£35" },
-  { id: "1year", label: "1 year", price: "£50" },
-  { id: "exam", label: "Until my exam", price: "£80" },
+  { id: "3months", label: "3 months", price: "£35" },
+  { id: "lifetime", label: "Lifetime access", price: "£50" },
 ];
 
 export const PLANS: Plan[] = [
@@ -31,9 +30,9 @@ export const PLANS: Plan[] = [
   { id: "tutorial-recordings", qualification: "A-Level", subject: "Tutorials", variant: "Recordings", title: "Tutorial Recordings", emoji: "🎥", live: true },
 ];
 
-export const FREE_PLAN_IDS = ["tutorial-recordings"];
+// Nothing is permanently free — access comes from the 48-hour trial or a paid subscription.
+export const FREE_PLAN_IDS: string[] = [];
 
-// Kept for backwards compatibility (OCR default)
 export const MODULE_TITLES: Record<string, string> = {
   M2: "Module 2 — Foundations in Biology",
   M3: "Module 3 — Exchange and Transport",
@@ -42,7 +41,6 @@ export const MODULE_TITLES: Record<string, string> = {
   M6: "Module 6 — Genetics, Evolution and Ecosystems",
 };
 
-// Real module/topic names per exam board
 export const MODULE_TITLES_BY_BOARD: Record<string, Record<string, string>> = {
   OCR: {
     M1: "Module 1 — Development of practical skills in biology",
