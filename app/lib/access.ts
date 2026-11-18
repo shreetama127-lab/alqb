@@ -1,71 +1,54 @@
-export type PriceOption = {
-  id: string;
-  label: string;
-  price: string;
-};
+import { PLANS } from "@/app/lib/plans";
 
-export type Plan = {
-  id: string;
-  qualification: "A-Level" | "IB";
-  subject: string;
-  variant: string;
-  title: string;
-  emoji: string;
-  live: boolean;
-};
-
-export const PRICE_OPTIONS: PriceOption[] = [
-  { id: "1month", label: "1 month", price: "£20" },
-  { id: "6months", label: "6 months", price: "£35" },
-  { id: "1year", label: "1 year", price: "£50" },
-  { id: "exam", label: "Until my exam", price: "£80" },
+// Founders / testers keep full access to all live banks, always.
+export const FOUNDER_EMAILS = [
+  "shreetama127@gmail.com",
+  "anitalese@ymail.com",
+  "zchasmu@ucl.ac.uk",
 ];
 
-export const PLANS: Plan[] = [
-  { id: "ocr-biology", qualification: "A-Level", subject: "Biology", variant: "OCR", title: "OCR A-Level Biology", emoji: "🧬", live: true },
-  { id: "aqa-biology", qualification: "A-Level", subject: "Biology", variant: "AQA", title: "AQA A-Level Biology", emoji: "🌿", live: true },
-  { id: "ocr-chemistry", qualification: "A-Level", subject: "Chemistry", variant: "OCR", title: "OCR A-Level Chemistry", emoji: "🧪", live: false },
-  { id: "aqa-chemistry", qualification: "A-Level", subject: "Chemistry", variant: "AQA", title: "AQA A-Level Chemistry", emoji: "⚗️", live: false },
-  { id: "ib-biology-sl", qualification: "IB", subject: "Biology", variant: "Standard Level", title: "IB Biology (SL)", emoji: "🌍", live: false },
-  { id: "ib-biology-hl", qualification: "IB", subject: "Biology", variant: "Higher Level", title: "IB Biology (HL)", emoji: "🌏", live: false },
-  { id: "tutorial-recordings", qualification: "A-Level", subject: "Tutorials", variant: "Recordings", title: "Tutorial Recordings", emoji: "🎥", live: true },
-];
+// Length of the free trial every new account gets, in hours.
+export const TRIAL_HOURS = 48;
 
-// OCR temporarily removed from free list to test payments — put "ocr-biology" back after testing
-export const FREE_PLAN_IDS = ["tutorial-recordings"];
+// Every live (available) bank — what a trial grants access to.
+export function allLivePlanIds(): string[] {
+  return PLANS.filter((p) => p.live).map((p) => p.id);
+}
 
-// Kept for backwards compatibility (OCR default)
-export const MODULE_TITLES: Record<string, string> = {
-  M2: "Module 2 — Foundations in Biology",
-  M3: "Module 3 — Exchange and Transport",
-  M4: "Module 4 — Biodiversity, Evolution and Disease",
-  M5: "Module 5 — Communication, Homeostasis and Energy",
-  M6: "Module 6 — Genetics, Evolution and Ecosystems",
-};
+export function isFounder(email: string | null | undefined): boolean {
+  return !!email && FOUNDER_EMAILS.includes(email.toLowerCase());
+}
 
-// Real module/topic names per exam board
-export const MODULE_TITLES_BY_BOARD: Record<string, Record<string, string>> = {
-  OCR: {
-    M1: "Module 1 — Development of practical skills in biology",
-    M2: "Module 2 — Foundations in biology",
-    M3: "Module 3 — Exchange and transport",
-    M4: "Module 4 — Biodiversity, evolution and disease",
-    M5: "Module 5 — Communication, homeostasis and energy",
-    M6: "Module 6 — Genetics, evolution and ecosystems",
-  },
-  AQA: {
-    M1: "Topic 1 — Biological molecules",
-    M2: "Topic 2 — Cells",
-    M3: "Topic 3 — Organisms exchange substances with their environment",
-    M4: "Topic 4 — Genetic information, variation and relationships between organisms",
-    M5: "Topic 5 — Energy transfers in and between organisms",
-    M6: "Topic 6 — Organisms respond to changes in their environments",
-    M7: "Topic 7 — Genetics, populations, evolution and ecosystems",
-    M8: "Topic 8 — The control of gene expression",
-  },
-};
+export function trialActive(createdAt: string | null | undefined): boolean {
+  if (!createdAt) return false;
+  const elapsed = Date.now() - new Date(createdAt).getTime();
+  return elapsed >= 0 && elapsed < TRIAL_HOURS * 60 * 60 * 1000;
+}
 
-export function moduleTitle(board: string | null | undefined, moduleCode: string): string {
-  const b = (board || "OCR").toUpperCase();
-  return MODULE_TITLES_BY_BOARD[b]?.[moduleCode] || MODULE_TITLES[moduleCode] || moduleCode;
+export function trialHoursLeft(createdAt: string | null | undefined): number {
+  if (!createdAt) return 0;
+  const remaining = TRIAL_HOURS * 60 * 60 * 1000 - (Date.now() - new Date(createdAt).getTime());
+  return Math.max(0, Math.ceil(remaining / (60 * 60 * 1000)));
+}
+
+// The plan ids a user can access right now: anything they've paid for,
+// plus (during their 48-hour trial, or if they're a founder) all live banks.
+export function accessiblePlanIds(params: {
+  email?: string | null;
+  createdAt?: string | null;
+  ownedPlanIds: string[];
+}): string[] {
+  const { email, createdAt, ownedPlanIds } = params;
+  if (isFounder(email) || trialActive(createdAt)) {
+    return [...new Set([...ownedPlanIds, ...allLivePlanIds()])];
+  }
+  return [...new Set(ownedPlanIds)];
+}
+
+// Backwards-compatible: older pages still call plansForUser(email, FREE_PLAN_IDS).
+// Nothing is permanently free now, but founders still get all live banks.
+export function plansForUser(email: string | null | undefined, publicFreeIds: string[]): string[] {
+  const ids = [...publicFreeIds];
+  if (isFounder(email)) ids.push(...allLivePlanIds());
+  return [...new Set(ids)];
 }
